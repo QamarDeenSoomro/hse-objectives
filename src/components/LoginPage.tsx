@@ -32,10 +32,10 @@ export const LoginPage = () => {
         title: "Success",
         description: "Welcome to HSE Objectives!",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Login Failed",
-        description: "Invalid email or password",
+        description: error.message || "Invalid email or password",
         variant: "destructive",
       });
     } finally {
@@ -94,7 +94,7 @@ export const LoginPage = () => {
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600 font-medium mb-2">Demo Credentials:</p>
             <p className="text-xs text-gray-500">Admin: admin@yourdomain.com / Qamer@456</p>
-            <p className="text-xs text-gray-500">User: any@email.com / 6+ chars</p>
+            <p className="text-xs text-gray-500">Create other users in admin panel</p>
           </div>
         </CardContent>
       </Card>

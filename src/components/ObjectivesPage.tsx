@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,52 +8,42 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, Target } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Objective {
   id: string;
   title: string;
   description: string;
   weightage: number;
-  numActivities: number;
-  createdBy: string;
-  createdAt: string;
+  num_activities: number;
+  owner_id: string;
+  created_by: string;
+  created_at: string;
+  owner?: {
+    full_name: string;
+    email: string;
+  };
+  creator?: {
+    full_name: string;
+    email: string;
+  };
+}
+
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string;
 }
 
 export const ObjectivesPage = () => {
-  const { isAdmin } = useAuth();
-  const [objectives, setObjectives] = useState<Objective[]>([
-    {
-      id: "1",
-      title: "Fire Safety Training",
-      description: "Complete comprehensive fire safety training for all team members",
-      weightage: 25,
-      numActivities: 8,
-      createdBy: "admin@yourdomain.com",
-      createdAt: "2024-01-01",
-    },
-    {
-      id: "2",
-      title: "Environmental Compliance",
-      description: "Ensure all activities meet environmental regulations",
-      weightage: 30,
-      numActivities: 12,
-      createdBy: "admin@yourdomain.com",
-      createdAt: "2024-01-02",
-    },
-    {
-      id: "3",
-      title: "Workplace Ergonomics",
-      description: "Implement ergonomic improvements across workstations",
-      weightage: 20,
-      numActivities: 6,
-      createdBy: "admin@yourdomain.com",
-      createdAt: "2024-01-03",
-    },
-  ]);
-
+  const { isAdmin, profile } = useAuth();
+  const [objectives, setObjectives] = useState<Objective[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
   const [formData, setFormData] = useState({
@@ -61,9 +51,56 @@ export const ObjectivesPage = () => {
     description: "",
     weightage: "",
     numActivities: "",
+    ownerId: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetchObjectives();
+    if (isAdmin()) {
+      fetchUsers();
+    }
+  }, [isAdmin]);
+
+  const fetchObjectives = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('objectives')
+        .select(`
+          *,
+          owner:profiles!objectives_owner_id_fkey(full_name, email),
+          creator:profiles!objectives_created_by_fkey(full_name, email)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setObjectives(data || []);
+    } catch (error) {
+      console.error('Error fetching objectives:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch objectives",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .order('full_name');
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.title || !formData.description || !formData.weightage || !formData.numActivities) {
@@ -75,33 +112,62 @@ export const ObjectivesPage = () => {
       return;
     }
 
-    const objectiveData = {
-      id: editingObjective?.id || Date.now().toString(),
-      title: formData.title,
-      description: formData.description,
-      weightage: parseInt(formData.weightage),
-      numActivities: parseInt(formData.numActivities),
-      createdBy: "admin@yourdomain.com",
-      createdAt: editingObjective?.createdAt || new Date().toISOString().split('T')[0],
-    };
-
-    if (editingObjective) {
-      setObjectives(prev => prev.map(obj => obj.id === editingObjective.id ? objectiveData : obj));
+    if (isAdmin() && !formData.ownerId) {
       toast({
-        title: "Success",
-        description: "Objective updated successfully",
+        title: "Error",
+        description: "Please select an owner for the objective",
+        variant: "destructive",
       });
-    } else {
-      setObjectives(prev => [...prev, objectiveData]);
-      toast({
-        title: "Success",
-        description: "Objective created successfully",
-      });
+      return;
     }
 
-    setIsDialogOpen(false);
-    setEditingObjective(null);
-    setFormData({ title: "", description: "", weightage: "", numActivities: "" });
+    try {
+      const objectiveData = {
+        title: formData.title,
+        description: formData.description,
+        weightage: parseFloat(formData.weightage),
+        num_activities: parseInt(formData.numActivities),
+        owner_id: isAdmin() ? formData.ownerId : profile?.id,
+        created_by: profile?.id,
+      };
+
+      if (editingObjective) {
+        const { error } = await supabase
+          .from('objectives')
+          .update(objectiveData)
+          .eq('id', editingObjective.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Success",
+          description: "Objective updated successfully",
+        });
+      } else {
+        const { error } = await supabase
+          .from('objectives')
+          .insert([objectiveData]);
+
+        if (error) throw error;
+
+        toast({
+          title: "Success",
+          description: "Objective created successfully",
+        });
+      }
+
+      setIsDialogOpen(false);
+      setEditingObjective(null);
+      setFormData({ title: "", description: "", weightage: "", numActivities: "", ownerId: "" });
+      fetchObjectives();
+    } catch (error) {
+      console.error('Error saving objective:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save objective",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleEdit = (objective: Objective) => {
@@ -110,24 +176,49 @@ export const ObjectivesPage = () => {
       title: objective.title,
       description: objective.description,
       weightage: objective.weightage.toString(),
-      numActivities: objective.numActivities.toString(),
+      numActivities: objective.num_activities.toString(),
+      ownerId: objective.owner_id,
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setObjectives(prev => prev.filter(obj => obj.id !== id));
-    toast({
-      title: "Success",
-      description: "Objective deleted successfully",
-    });
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('objectives')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Objective deleted successfully",
+      });
+      fetchObjectives();
+    } catch (error) {
+      console.error('Error deleting objective:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete objective",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleAddNew = () => {
     setEditingObjective(null);
-    setFormData({ title: "", description: "", weightage: "", numActivities: "" });
+    setFormData({ title: "", description: "", weightage: "", numActivities: "", ownerId: "" });
     setIsDialogOpen(true);
   };
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -202,6 +293,26 @@ export const ObjectivesPage = () => {
                     />
                   </div>
                 </div>
+                {isAdmin() && (
+                  <div className="space-y-2">
+                    <Label htmlFor="owner">Objective Owner</Label>
+                    <Select 
+                      value={formData.ownerId} 
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, ownerId: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select objective owner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.full_name || user.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 <div className="flex justify-end gap-3">
                   <Button 
                     type="button" 
@@ -236,6 +347,7 @@ export const ObjectivesPage = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Title</TableHead>
+                  <TableHead>Owner</TableHead>
                   <TableHead>Weightage</TableHead>
                   <TableHead>Activities</TableHead>
                   <TableHead>Created By</TableHead>
@@ -255,20 +367,26 @@ export const ObjectivesPage = () => {
                       </div>
                     </TableCell>
                     <TableCell>
+                      <div className="text-sm">
+                        <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
+                        <div className="text-gray-600">{objective.owner?.email}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="outline" className="text-blue-600 border-blue-600">
                         {objective.weightage}%
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {objective.numActivities} activities
+                        {objective.num_activities} activities
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
-                      {objective.createdBy}
+                      {objective.creator?.full_name || objective.creator?.email}
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
-                      {new Date(objective.createdAt).toLocaleDateString()}
+                      {new Date(objective.created_at).toLocaleDateString()}
                     </TableCell>
                     {isAdmin() && (
                       <TableCell>
