@@ -3,30 +3,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Target, Users, CheckSquare, TrendingUp } from "lucide-react";
+import { useDashboardData } from "@/hooks/useDashboardData";
 
 export const Dashboard = () => {
-  // Mock data - in real app, this would come from Supabase
-  const stats = {
-    totalObjectives: 12,
-    averageCompletion: 73,
-    totalActivities: 156,
-    plannedActivities: 200,
-  };
+  const { stats, teamData, objectiveStatuses, isLoading } = useDashboardData();
 
-  const teamData = [
-    { name: "John Smith", completion: 85, activities: 24, lastUpdate: "2024-01-15" },
-    { name: "Sarah Johnson", completion: 72, activities: 18, lastUpdate: "2024-01-14" },
-    { name: "Mike Davis", completion: 91, activities: 31, lastUpdate: "2024-01-16" },
-    { name: "Emily Brown", completion: 68, activities: 15, lastUpdate: "2024-01-13" },
-    { name: "Alex Wilson", completion: 79, activities: 22, lastUpdate: "2024-01-15" },
-  ];
-
-  const recentObjectives = [
-    { title: "Fire Safety Training", completion: 95, weightage: 25 },
-    { title: "Environmental Compliance", completion: 78, weightage: 30 },
-    { title: "Workplace Ergonomics", completion: 62, weightage: 20 },
-    { title: "Emergency Response", completion: 88, weightage: 25 },
-  ];
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -99,23 +89,29 @@ export const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {teamData.map((member, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-900">{member.name}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">{member.activities} activities</span>
-                      <Badge variant={member.completion >= 80 ? "default" : "secondary"}>
-                        {member.completion}%
-                      </Badge>
+              {teamData.length > 0 ? (
+                teamData.map((member, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-900">{member.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">{member.activities} activities</span>
+                        <Badge variant={member.completion >= 80 ? "default" : "secondary"}>
+                          {member.completion}%
+                        </Badge>
+                      </div>
+                    </div>
+                    <Progress value={member.completion} className="h-2" />
+                    <div className="text-xs text-gray-500">
+                      Last update: {new Date(member.lastUpdate).toLocaleDateString()}
                     </div>
                   </div>
-                  <Progress value={member.completion} className="h-2" />
-                  <div className="text-xs text-gray-500">
-                    Last update: {new Date(member.lastUpdate).toLocaleDateString()}
-                  </div>
+                ))
+              ) : (
+                <div className="text-center text-gray-500 py-4">
+                  No team members found. Create users in the admin panel.
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
@@ -131,20 +127,26 @@ export const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentObjectives.map((objective, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-900">{objective.title}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600">Weight: {objective.weightage}%</span>
-                      <Badge variant={objective.completion >= 80 ? "default" : "secondary"}>
-                        {objective.completion}%
-                      </Badge>
+              {objectiveStatuses.length > 0 ? (
+                objectiveStatuses.map((objective, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-900">{objective.title}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">Weight: {objective.weightage}%</span>
+                        <Badge variant={objective.completion >= 80 ? "default" : "secondary"}>
+                          {objective.completion}%
+                        </Badge>
+                      </div>
                     </div>
+                    <Progress value={objective.completion} className="h-2" />
                   </div>
-                  <Progress value={objective.completion} className="h-2" />
+                ))
+              ) : (
+                <div className="text-center text-gray-500 py-4">
+                  No objectives found. Create objectives in the admin panel.
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
