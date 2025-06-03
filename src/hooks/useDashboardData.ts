@@ -1,6 +1,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface DashboardStats {
   totalObjectives: number;
@@ -22,13 +23,16 @@ interface ObjectiveStatus {
   title: string;
   completion: number;
   weightage: number;
+  ownerName?: string;
 }
 
 export const useDashboardData = () => {
+  const { profile, isAdmin } = useAuth();
+
   const { data: objectives = [], isLoading: objectivesLoading } = useQuery({
-    queryKey: ['objectives'],
+    queryKey: ['objectives', profile?.id, isAdmin()],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('objectives')
         .select(`
           *,
@@ -36,14 +40,27 @@ export const useDashboardData = () => {
           updates:objective_updates(achieved_count, update_date)
         `);
       
+      // If not admin, only show user's own objectives
+      if (!isAdmin() && profile?.id) {
+        query = query.eq('owner_id', profile.id);
+      }
+      
+      const { data, error } = await query;
+      
       if (error) throw error;
       return data;
     },
+    enabled: !!profile,
   });
 
   const { data: allUsers = [], isLoading: usersLoading } = useQuery({
-    queryKey: ['users'],
+    queryKey: ['users', isAdmin()],
     queryFn: async () => {
+      if (!isAdmin()) {
+        // Regular users only see their own data
+        return profile ? [profile] : [];
+      }
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -52,12 +69,13 @@ export const useDashboardData = () => {
       if (error) throw error;
       return data;
     },
+    enabled: !!profile,
   });
 
   const { data: allUpdates = [], isLoading: updatesLoading } = useQuery({
-    queryKey: ['objective_updates'],
+    queryKey: ['objective_updates', profile?.id, isAdmin()],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('objective_updates')
         .select(`
           *,
@@ -65,9 +83,17 @@ export const useDashboardData = () => {
           objective:objectives!objective_id(title, num_activities)
         `);
       
+      // If not admin, only show user's own updates
+      if (!isAdmin() && profile?.id) {
+        query = query.eq('user_id', profile.id);
+      }
+      
+      const { data, error } = await query;
+      
       if (error) throw error;
       return data;
     },
+    enabled: !!profile,
   });
 
   const isLoading = objectivesLoading || usersLoading || updatesLoading;
@@ -127,6 +153,7 @@ export const useDashboardData = () => {
       title: objective.title,
       completion,
       weightage: Number(objective.weightage),
+      ownerName: isAdmin() ? objective.owner?.full_name || 'Unknown' : undefined,
     };
   });
 
@@ -135,5 +162,6 @@ export const useDashboardData = () => {
     teamData,
     objectiveStatuses,
     isLoading,
+    isAdmin: isAdmin(),
   };
 };

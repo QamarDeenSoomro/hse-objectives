@@ -2,15 +2,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Target, Users, CheckSquare, TrendingUp } from "lucide-react";
+import { Target, Users, CheckSquare, TrendingUp, User } from "lucide-react";
 import { useDashboardData } from "@/hooks/useDashboardData";
 
 export const Dashboard = () => {
-  const { stats, teamData, objectiveStatuses, isLoading } = useDashboardData();
+  const { stats, teamData, objectiveStatuses, isLoading, isAdmin } = useDashboardData();
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="p-4 md:p-6 space-y-6">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -19,26 +19,35 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">Overview of HSE objectives and team performance</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+            {isAdmin ? "Admin Dashboard" : "My Dashboard"}
+          </h1>
+          <p className="text-gray-600 mt-1 text-sm md:text-base">
+            {isAdmin 
+              ? "Overview of HSE objectives and team performance" 
+              : "Your HSE objectives and progress"
+            }
+          </p>
         </div>
-        <Badge variant="outline" className="text-green-600 border-green-600">
+        <Badge variant="outline" className="text-green-600 border-green-600 text-xs md:text-sm">
           System Active
         </Badge>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Objectives</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              {isAdmin ? "Total Objectives" : "My Objectives"}
+            </CardTitle>
             <Target className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalObjectives}</div>
+            <div className="text-xl md:text-2xl font-bold">{stats.totalObjectives}</div>
             <p className="text-xs text-blue-100">Active objectives</p>
           </CardContent>
         </Card>
@@ -49,8 +58,10 @@ export const Dashboard = () => {
             <TrendingUp className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.averageCompletion}%</div>
-            <p className="text-xs text-green-100">Team average</p>
+            <div className="text-xl md:text-2xl font-bold">{stats.averageCompletion}%</div>
+            <p className="text-xs text-green-100">
+              {isAdmin ? "Team average" : "My average"}
+            </p>
           </CardContent>
         </Card>
 
@@ -60,43 +71,58 @@ export const Dashboard = () => {
             <CheckSquare className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalActivities}</div>
+            <div className="text-xl md:text-2xl font-bold">{stats.totalActivities}</div>
             <p className="text-xs text-purple-100">of {stats.plannedActivities} planned</p>
           </CardContent>
         </Card>
 
         <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-500 to-orange-600 text-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Team Members</CardTitle>
-            <Users className="h-4 w-4" />
+            <CardTitle className="text-sm font-medium">
+              {isAdmin ? "Team Members" : "My Progress"}
+            </CardTitle>
+            {isAdmin ? <Users className="h-4 w-4" /> : <User className="h-4 w-4" />}
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{teamData.length}</div>
-            <p className="text-xs text-orange-100">Active users</p>
+            <div className="text-xl md:text-2xl font-bold">
+              {isAdmin ? teamData.length : `${stats.averageCompletion}%`}
+            </div>
+            <p className="text-xs text-orange-100">
+              {isAdmin ? "Active users" : "Overall progress"}
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Team Performance */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        {/* Team Performance / User Performance */}
         <Card className="border-0 shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-600" />
-              Team Performance
+            <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+              {isAdmin ? <Users className="h-5 w-5 text-blue-600" /> : <User className="h-5 w-5 text-blue-600" />}
+              {isAdmin ? "Team Performance" : "My Performance"}
             </CardTitle>
-            <CardDescription>Individual completion rates and activity counts</CardDescription>
+            <CardDescription className="text-sm">
+              {isAdmin 
+                ? "Individual completion rates and activity counts" 
+                : "Your completion rates and activity counts"
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {teamData.length > 0 ? (
                 teamData.map((member, index) => (
                   <div key={index} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-900">{member.name}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">{member.activities} activities</span>
-                        <Badge variant={member.completion >= 80 ? "default" : "secondary"}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <span className="font-medium text-gray-900 text-sm md:text-base truncate">
+                        {member.name}
+                      </span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-xs md:text-sm text-gray-600">
+                          {member.activities} activities
+                        </span>
+                        <Badge variant={member.completion >= 80 ? "default" : "secondary"} className="text-xs">
                           {member.completion}%
                         </Badge>
                       </div>
@@ -108,43 +134,64 @@ export const Dashboard = () => {
                   </div>
                 ))
               ) : (
-                <div className="text-center text-gray-500 py-4">
-                  No team members found. Create users in the admin panel.
+                <div className="text-center text-gray-500 py-4 text-sm">
+                  {isAdmin 
+                    ? "No team members found. Create users in the admin panel." 
+                    : "No performance data available yet."
+                  }
                 </div>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Recent Objectives */}
+        {/* Objectives Status */}
         <Card className="border-0 shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
               <Target className="h-5 w-5 text-green-600" />
-              Objectives Status
+              {isAdmin ? "All Objectives Status" : "My Objectives Status"}
             </CardTitle>
-            <CardDescription>Current progress on key objectives</CardDescription>
+            <CardDescription className="text-sm">
+              Current progress on {isAdmin ? "all" : "your"} objectives
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {objectiveStatuses.length > 0 ? (
                 objectiveStatuses.map((objective, index) => (
                   <div key={index} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-gray-900">{objective.title}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Weight: {objective.weightage}%</span>
-                        <Badge variant={objective.completion >= 80 ? "default" : "secondary"}>
-                          {objective.completion}%
-                        </Badge>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-gray-900 text-sm md:text-base block truncate">
+                            {objective.title}
+                          </span>
+                          {isAdmin && objective.ownerName && (
+                            <span className="text-xs text-gray-500">
+                              Owner: {objective.ownerName}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs md:text-sm text-gray-600">
+                            Weight: {objective.weightage}%
+                          </span>
+                          <Badge variant={objective.completion >= 80 ? "default" : "secondary"} className="text-xs">
+                            {objective.completion}%
+                          </Badge>
+                        </div>
                       </div>
                     </div>
                     <Progress value={objective.completion} className="h-2" />
                   </div>
                 ))
               ) : (
-                <div className="text-center text-gray-500 py-4">
-                  No objectives found. Create objectives in the admin panel.
+                <div className="text-center text-gray-500 py-4 text-sm">
+                  {isAdmin 
+                    ? "No objectives found. Create objectives in the admin panel." 
+                    : "No objectives assigned to you yet."
+                  }
                 </div>
               )}
             </div>
