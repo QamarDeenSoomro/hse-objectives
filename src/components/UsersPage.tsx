@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Users, Shield, User } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Shield, User, Key } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface UserData {
@@ -26,6 +26,9 @@ export const UsersPage = () => {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+  const [newPassword, setNewPassword] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     fullName: "",
@@ -116,6 +119,43 @@ export const UsersPage = () => {
     }
   };
 
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedUser || !newPassword) {
+      toast({
+        title: "Error",
+        description: "Please enter a new password",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.admin.updateUserById(selectedUser.id, {
+        password: newPassword
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Password updated for ${selectedUser.email}`,
+      });
+
+      setIsPasswordDialogOpen(false);
+      setSelectedUser(null);
+      setNewPassword("");
+    } catch (error: any) {
+      console.error('Error updating password:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update password",
+        variant: "destructive",
+      });
+    }
+  };
+
   const toggleUserRole = async (userId: string, currentRole: string) => {
     try {
       const newRole = currentRole === "admin" ? "user" : "admin";
@@ -165,6 +205,12 @@ export const UsersPage = () => {
   const handleAddNew = () => {
     setFormData({ email: "", fullName: "", role: "user", password: "" });
     setIsDialogOpen(true);
+  };
+
+  const handleChangePassword = (user: UserData) => {
+    setSelectedUser(user);
+    setNewPassword("");
+    setIsPasswordDialogOpen(true);
   };
 
   if (!isAdmin()) {
@@ -279,6 +325,44 @@ export const UsersPage = () => {
         </Dialog>
       </div>
 
+      {/* Password Change Dialog */}
+      <Dialog open={isPasswordDialogOpen} onOpenChange={setIsPasswordDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-blue-600" />
+              Change Password
+            </DialogTitle>
+            <DialogDescription>
+              Update password for {selectedUser?.email}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handlePasswordChange} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                minLength={6}
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsPasswordDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Update Password</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="border-0 shadow-lg">
@@ -368,6 +452,14 @@ export const UsersPage = () => {
                         >
                           <Edit className="h-4 w-4 mr-1" />
                           {user.role === "admin" ? "Demote" : "Promote"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleChangePassword(user)}
+                        >
+                          <Key className="h-4 w-4 mr-1" />
+                          Password
                         </Button>
                         <Button
                           variant="outline"
