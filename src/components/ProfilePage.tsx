@@ -10,9 +10,8 @@ import { toast } from "@/hooks/use-toast";
 import { User, Lock, Shield } from "lucide-react";
 
 export const ProfilePage = () => {
-  const { user } = useAuth();
+  const { user, updatePassword } = useAuth();
   const [passwordData, setPasswordData] = useState({
-    currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
@@ -20,7 +19,7 @@ export const ProfilePage = () => {
   const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+    if (!passwordData.newPassword || !passwordData.confirmPassword) {
       toast({
         title: "Error",
         description: "Please fill in all password fields",
@@ -47,17 +46,24 @@ export const ProfilePage = () => {
       return;
     }
 
-    // In a real app, this would call Supabase auth API
-    toast({
-      title: "Success",
-      description: "Password updated successfully",
-    });
+    const result = await updatePassword(passwordData.newPassword);
 
-    setPasswordData({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
+    if (result.success) {
+      toast({
+        title: "Success",
+        description: "Password updated successfully.",
+      });
+      setPasswordData({
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } else {
+      toast({
+        title: "Error updating password",
+        description: result.error?.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -131,16 +137,6 @@ export const ProfilePage = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handlePasswordChange} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="currentPassword">Current Password</Label>
-                <Input
-                  id="currentPassword"
-                  type="password"
-                  value={passwordData.currentPassword}
-                  onChange={(e) => setPasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
-                  placeholder="Enter current password"
-                />
-              </div>
               <div className="space-y-2">
                 <Label htmlFor="newPassword">New Password</Label>
                 <Input
