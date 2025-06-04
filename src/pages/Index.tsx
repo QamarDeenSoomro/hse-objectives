@@ -46,7 +46,7 @@ const AppContent = () => {
   return (
     <div className="flex min-h-screen bg-gray-50">
       <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-auto md:ml-0 pt-16 md:pt-0">
         {renderPage()}
       </main>
     </div>

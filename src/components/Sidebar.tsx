@@ -1,6 +1,8 @@
 
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { 
   LayoutDashboard, 
   Target, 
@@ -8,7 +10,8 @@ import {
   Users, 
   User, 
   LogOut,
-  Shield
+  Shield,
+  Menu
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +22,7 @@ interface SidebarProps {
 
 export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
   const { user, logout, isAdmin } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
 
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -28,8 +32,13 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
     { id: "profile", label: "Profile", icon: User },
   ];
 
-  return (
-    <div className="w-64 bg-white border-r border-gray-200 shadow-lg flex flex-col">
+  const handleMenuClick = (pageId: string) => {
+    setCurrentPage(pageId);
+    setIsOpen(false);
+  };
+
+  const SidebarContent = () => (
+    <div className="h-full bg-white border-r border-gray-200 shadow-lg flex flex-col">
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center space-x-2">
           <Shield className="h-8 w-8 text-blue-600" />
@@ -57,7 +66,7 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
                   ? "bg-gradient-to-r from-blue-600 to-green-600 text-white shadow-md" 
                   : "hover:bg-gray-100"
               )}
-              onClick={() => setCurrentPage(item.id)}
+              onClick={() => handleMenuClick(item.id)}
             >
               <Icon className="mr-3 h-4 w-4" />
               {item.label}
@@ -88,5 +97,32 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
         </Button>
       </div>
     </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <div className="hidden md:block w-64">
+        <SidebarContent />
+      </div>
+
+      {/* Mobile Sidebar */}
+      <div className="md:hidden">
+        <Sheet open={isOpen} onOpenChange={setIsOpen}>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="fixed top-4 left-4 z-50 bg-white shadow-md"
+            >
+              <Menu className="h-6 w-6" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="p-0 w-64">
+            <SidebarContent />
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   );
 };

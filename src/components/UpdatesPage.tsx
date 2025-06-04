@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,28 +6,36 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Edit, CheckSquare, Camera, Eye } from "lucide-react";
+import { Plus, Edit, CheckSquare, Camera, Eye, Trash2 } from "lucide-react";
 import { useUpdatesData } from "@/hooks/useUpdatesData";
 import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
 
 export const UpdatesPage = () => {
   const { isAdmin } = useAuth();
-  const { userObjectives, updates, isLoading, createUpdate, isCreating } = useUpdatesData();
+  const { userObjectives, updates, isLoading, createUpdate, isCreating, updateUpdate, isUpdating, deleteUpdate, isDeleting } = useUpdatesData();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedObjectiveUpdates, setSelectedObjectiveUpdates] = useState<any[]>([]);
   const [selectedObjectiveTitle, setSelectedObjectiveTitle] = useState("");
+  const [editingUpdate, setEditingUpdate] = useState<any>(null);
   
   const [formData, setFormData] = useState({
     objectiveId: "",
     achievedCount: "",
     updateDate: new Date().toISOString().split('T')[0],
   });
+  const [editFormData, setEditFormData] = useState({
+    achievedCount: "",
+    updateDate: "",
+  });
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
+  const [editSelectedPhotos, setEditSelectedPhotos] = useState<File[]>([]);
 
   // Filter updates based on user role
   const myUpdates = updates.filter(update => update.user_id === useAuth().profile?.id);
@@ -61,6 +68,26 @@ export const UpdatesPage = () => {
     setSelectedPhotos([]);
   };
 
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editFormData.achievedCount || !editFormData.updateDate || !editingUpdate) {
+      return;
+    }
+
+    updateUpdate({
+      id: editingUpdate.id,
+      achievedCount: parseInt(editFormData.achievedCount),
+      updateDate: editFormData.updateDate,
+      photos: editSelectedPhotos,
+    });
+
+    setIsEditDialogOpen(false);
+    setEditingUpdate(null);
+    setEditFormData({ achievedCount: "", updateDate: "" });
+    setEditSelectedPhotos([]);
+  };
+
   const handleAddNew = () => {
     setFormData({ 
       objectiveId: "", 
@@ -71,9 +98,29 @@ export const UpdatesPage = () => {
     setIsDialogOpen(true);
   };
 
+  const handleEdit = (update: any) => {
+    setEditingUpdate(update);
+    setEditFormData({
+      achievedCount: update.achieved_count.toString(),
+      updateDate: update.update_date,
+    });
+    setEditSelectedPhotos([]);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleDelete = (updateId: string) => {
+    deleteUpdate(updateId);
+  };
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       setSelectedPhotos(Array.from(e.target.files));
+    }
+  };
+
+  const handleEditPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setEditSelectedPhotos(Array.from(e.target.files));
     }
   };
 
@@ -94,7 +141,7 @@ export const UpdatesPage = () => {
             <TableHead>Progress</TableHead>
             <TableHead>Date</TableHead>
             <TableHead>Photos</TableHead>
-            {isAdmin() && <TableHead>Actions</TableHead>}
+            <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -133,17 +180,58 @@ export const UpdatesPage = () => {
                   <span className="text-gray-400">No photos</span>
                 )}
               </TableCell>
-              {isAdmin() && (
-                <TableCell>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleViewObjectiveDetails(update.objective_id, update.objective?.title || 'Unknown')}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              )}
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  {isAdmin() && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleViewObjectiveDetails(update.objective_id, update.objective?.title || 'Unknown')}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {isAdmin() && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(update)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Update</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete this update? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(update.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  )}
+                </div>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -257,6 +345,71 @@ export const UpdatesPage = () => {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Edit Update Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5 text-blue-600" />
+              Edit Update
+            </DialogTitle>
+            <DialogDescription>
+              Modify the progress update details
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editAchievedCount">Activities Completed</Label>
+              <Input
+                id="editAchievedCount"
+                type="number"
+                min="0"
+                value={editFormData.achievedCount}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, achievedCount: e.target.value }))}
+                placeholder="Enter number of completed activities"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editUpdateDate">Update Date</Label>
+              <Input
+                id="editUpdateDate"
+                type="date"
+                value={editFormData.updateDate}
+                onChange={(e) => setEditFormData(prev => ({ ...prev, updateDate: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editPhotos">Add New Photos (Optional)</Label>
+              <Input
+                id="editPhotos"
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleEditPhotoChange}
+                className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              {editSelectedPhotos.length > 0 && (
+                <div className="text-sm text-gray-600">
+                  {editSelectedPhotos.length} new photo(s) selected
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsEditDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isUpdating}>
+                {isUpdating ? "Updating..." : "Update"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Tabs defaultValue={isAdmin() ? "all" : "my"} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
