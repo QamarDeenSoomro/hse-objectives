@@ -246,7 +246,12 @@ export const ObjectivesPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Objectives Management</h1>
-          <p className="text-gray-600 mt-1">Manage HSE objectives and track progress</p>
+          <p className="text-gray-600 mt-1">Manage HSE objectives and track progress.</p>
+          {isAdmin() && objectives.length > 0 && (
+            <p className="text-sm text-gray-500 mt-2">
+              Total objectives being managed: <Badge variant="secondary">{objectives.length}</Badge>
+            </p>
+          )}
         </div>
         {isAdmin() && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -352,107 +357,123 @@ export const ObjectivesPage = () => {
         )}
       </div>
 
-      <Card className="border-0 shadow-lg">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Target className="h-5 w-5 text-blue-600" />
-            {isAdmin() ? "All Objectives" : "My Objectives"}
-          </CardTitle>
-          <CardDescription>
-            {objectives.length} {objectives.length === 1 ? "objective" : "objectives"} configured
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Owner</TableHead>
-                  <TableHead>Weightage</TableHead>
-                  <TableHead>Activities</TableHead>
-                  <TableHead>Created By</TableHead>
-                  <TableHead>Created Date</TableHead>
-                  {isAdmin() && <TableHead>Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isAdmin() ? (
-                  Object.entries(
-                    objectives.reduce((acc, objective) => {
-                      const ownerName = objective.owner?.full_name || objective.owner?.email || objective.owner_id || "Unknown Owner";
-                      if (!acc[ownerName]) {
-                        acc[ownerName] = [];
-                      }
-                      acc[ownerName].push(objective);
-                      return acc;
-                    }, {} as Record<string, Objective[]>)
-                  ).map(([ownerName, ownerObjectives]) => (
-                    <>
-                      <TableRow key={ownerName} className="bg-slate-50 hover:bg-slate-100">
-                        <TableCell colSpan={7} className="py-2 px-4 font-semibold text-slate-700">
-                          Owner: {ownerName} ({ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"})
+      {isAdmin() ? (
+        <div className=""> {/* Grid classes removed */}
+          {Object.entries(
+            objectives.reduce((acc, objective) => {
+              const ownerName = objective.owner?.full_name || objective.owner?.email || objective.owner_id || "Unknown Owner";
+              if (!acc[ownerName]) {
+                acc[ownerName] = [];
+              }
+              acc[ownerName].push(objective);
+              return acc;
+            }, {} as Record<string, Objective[]>)
+          ).map(([ownerName, ownerObjectives]) => (
+            <Card key={ownerName} className="border-0 shadow-lg mb-6"> {/* mb-6 reinstated */}
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="h-5 w-5 text-blue-600" />
+                Objectives for {ownerName}
+              </CardTitle>
+              <CardDescription>
+                {ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"} assigned.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Weightage</TableHead>
+                      <TableHead>Activities</TableHead>
+                      <TableHead>Created By</TableHead>
+                      <TableHead>Created Date</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ownerObjectives.map((objective) => (
+                      <TableRow key={objective.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{objective.title}</div>
+                            <div className="text-sm text-gray-600 max-w-xs truncate">
+                              {objective.description}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-blue-600 border-blue-600">
+                            {objective.weightage}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {objective.num_activities} activities
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {objective.creator?.full_name || objective.creator?.email}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {new Date(objective.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(objective)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => handleDelete(objective.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
-                      {ownerObjectives.map((objective) => (
-                        <TableRow key={objective.id}>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium">{objective.title}</div>
-                              <div className="text-sm text-gray-600 max-w-xs truncate">
-                                {objective.description}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              {/* Owner name is in the group header, could simplify here if desired */}
-                              <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
-                              <div className="text-gray-600">{objective.owner?.email}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-blue-600 border-blue-600">
-                              {objective.weightage}%
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {objective.num_activities} activities
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {objective.creator?.full_name || objective.creator?.email}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {new Date(objective.created_at).toLocaleDateString()}
-                          </TableCell>
-                          {/* Admin check is already true here, so this will always render */}
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEdit(objective)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-red-600 hover:text-red-700"
-                                onClick={() => handleDelete(objective.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </>
-                  ))
-                ) : (
-                  objectives.map((objective) => (
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        </div>
+      ) : (
+        <Card className="border-0 shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-blue-600" />
+              My Objectives
+            </CardTitle>
+            <CardDescription>
+              {objectives.length} {objectives.length === 1 ? "objective" : "objectives"} configured
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Owner</TableHead>
+                    <TableHead>Weightage</TableHead>
+                    <TableHead>Activities</TableHead>
+                    <TableHead>Created By</TableHead>
+                    <TableHead>Created Date</TableHead>
+                    {/* Actions column is not rendered for non-admins here */}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {objectives.map((objective) => (
                     <TableRow key={objective.id}>
                       <TableCell>
                         <div>
@@ -484,36 +505,15 @@ export const ObjectivesPage = () => {
                       <TableCell className="text-sm text-gray-600">
                         {new Date(objective.created_at).toLocaleDateString()}
                       </TableCell>
-                      {/* This part is conditional based on isAdmin, which is false in this branch */}
-                      {isAdmin() && (
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(objective)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700"
-                              onClick={() => handleDelete(objective.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
+                      {/* isAdmin() is false in this branch, so this TableCell for actions won't render */}
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
