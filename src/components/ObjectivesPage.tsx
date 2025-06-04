@@ -358,7 +358,7 @@ export const ObjectivesPage = () => {
       </div>
 
       {isAdmin() ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className=""> {/* Grid classes removed */}
           {Object.entries(
             objectives.reduce((acc, objective) => {
               const ownerName = objective.owner?.full_name || objective.owner?.email || objective.owner_id || "Unknown Owner";
@@ -369,7 +369,7 @@ export const ObjectivesPage = () => {
               return acc;
             }, {} as Record<string, Objective[]>)
           ).map(([ownerName, ownerObjectives]) => (
-            <Card key={ownerName} className="border-0 shadow-lg"> {/* mb-6 removed, gap-6 from grid handles spacing */}
+            <Card key={ownerName} className="border-0 shadow-lg mb-6"> {/* mb-6 reinstated */}
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Target className="h-5 w-5 text-blue-600" />
