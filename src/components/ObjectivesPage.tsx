@@ -59,11 +59,11 @@ export const ObjectivesPage = () => {
     if (isAdmin()) {
       fetchUsers();
     }
-  }, [isAdmin]);
+  }, [isAdmin, profile]);
 
   const fetchObjectives = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('objectives')
         .select(`
           *,
@@ -71,6 +71,27 @@ export const ObjectivesPage = () => {
           creator:profiles!objectives_created_by_fkey(full_name, email)
         `)
         .order('created_at', { ascending: false });
+
+      if (!isAdmin()) {
+        if (profile && profile.id) {
+          query = query.eq('owner_id', profile.id);
+        } else {
+          // Not an admin and profile or profile.id is not available.
+          // This case should ideally be handled based on application logic.
+          // For now, log an error and don't fetch objectives or set to empty.
+          console.error("Error: Non-admin user profile or profile ID is missing. Cannot fetch objectives.");
+          setObjectives([]);
+          setLoading(false);
+          toast({
+            title: "Error",
+            description: "User profile not found. Cannot fetch objectives.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setObjectives(data || []);
@@ -335,10 +356,10 @@ export const ObjectivesPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-blue-600" />
-            All Objectives
+            {isAdmin() ? "All Objectives" : "My Objectives"}
           </CardTitle>
           <CardDescription>
-            {objectives.length} objectives configured
+            {objectives.length} {objectives.length === 1 ? "objective" : "objectives"} configured
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -356,61 +377,138 @@ export const ObjectivesPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {objectives.map((objective) => (
-                  <TableRow key={objective.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{objective.title}</div>
-                        <div className="text-sm text-gray-600 max-w-xs truncate">
-                          {objective.description}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
-                        <div className="text-gray-600">{objective.owner?.email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-blue-600 border-blue-600">
-                        {objective.weightage}%
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">
-                        {objective.num_activities} activities
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {objective.creator?.full_name || objective.creator?.email}
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {new Date(objective.created_at).toLocaleDateString()}
-                    </TableCell>
-                    {isAdmin() && (
+                {isAdmin() ? (
+                  Object.entries(
+                    objectives.reduce((acc, objective) => {
+                      const ownerName = objective.owner?.full_name || objective.owner?.email || objective.owner_id || "Unknown Owner";
+                      if (!acc[ownerName]) {
+                        acc[ownerName] = [];
+                      }
+                      acc[ownerName].push(objective);
+                      return acc;
+                    }, {} as Record<string, Objective[]>)
+                  ).map(([ownerName, ownerObjectives]) => (
+                    <>
+                      <TableRow key={ownerName} className="bg-slate-50 hover:bg-slate-100">
+                        <TableCell colSpan={7} className="py-2 px-4 font-semibold text-slate-700">
+                          Owner: {ownerName} ({ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"})
+                        </TableCell>
+                      </TableRow>
+                      {ownerObjectives.map((objective) => (
+                        <TableRow key={objective.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{objective.title}</div>
+                              <div className="text-sm text-gray-600 max-w-xs truncate">
+                                {objective.description}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              {/* Owner name is in the group header, could simplify here if desired */}
+                              <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
+                              <div className="text-gray-600">{objective.owner?.email}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-blue-600 border-blue-600">
+                              {objective.weightage}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {objective.num_activities} activities
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {objective.creator?.full_name || objective.creator?.email}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {new Date(objective.created_at).toLocaleDateString()}
+                          </TableCell>
+                          {/* Admin check is already true here, so this will always render */}
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEdit(objective)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => handleDelete(objective.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </>
+                  ))
+                ) : (
+                  objectives.map((objective) => (
+                    <TableRow key={objective.id}>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(objective)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => handleDelete(objective.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                        <div>
+                          <div className="font-medium">{objective.title}</div>
+                          <div className="text-sm text-gray-600 max-w-xs truncate">
+                            {objective.description}
+                          </div>
                         </div>
                       </TableCell>
-                    )}
-                  </TableRow>
-                ))}
+                      <TableCell>
+                        <div className="text-sm">
+                          <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
+                          <div className="text-gray-600">{objective.owner?.email}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-blue-600 border-blue-600">
+                          {objective.weightage}%
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {objective.num_activities} activities
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {objective.creator?.full_name || objective.creator?.email}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {new Date(objective.created_at).toLocaleDateString()}
+                      </TableCell>
+                      {/* This part is conditional based on isAdmin, which is false in this branch */}
+                      {isAdmin() && (
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(objective)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => handleDelete(objective.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
