@@ -16,7 +16,7 @@ export const ProfilePage = () => {
     confirmPassword: "",
   });
 
-  const handlePasswordChange = (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!passwordData.newPassword || !passwordData.confirmPassword) {
