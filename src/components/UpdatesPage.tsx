@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,36 @@ export const UpdatesPage = () => {
 
   // Filter updates based on user role
   const myUpdates = updates.filter(update => update.user_id === useAuth().profile?.id);
-  const allUpdates = updates;
+  const allUpdates = updates; // This will be used by groupedUpdates
+
+  // Define UpdateType based on observed structure in the file
+  interface UpdateType {
+    id: string;
+    achieved_count: number;
+    update_date: string;
+    photos: string[];
+    objective_id: string;
+    user_id: string;
+    objective?: { id: string; title: string; num_activities: number; };
+    user?: { id: string; full_name: string | null; email: string; };
+  }
+
+  const groupedUpdates = useMemo(() => {
+    if (!isAdmin()) return {};
+    return allUpdates.reduce((acc: Record<string, Record<string, UpdateType[]>>, update: UpdateType) => {
+      const ownerName = update.user?.full_name || update.user?.email || update.user_id || "Unknown User";
+      const objectiveTitle = update.objective?.title || update.objective_id || "Unknown Objective";
+
+      if (!acc[ownerName]) {
+        acc[ownerName] = {};
+      }
+      if (!acc[ownerName][objectiveTitle]) {
+        acc[ownerName][objectiveTitle] = [];
+      }
+      acc[ownerName][objectiveTitle].push(update);
+      return acc;
+    }, {});
+  }, [allUpdates, isAdmin]);
 
   const getCompletionPercentage = (achieved: number, total: number) => {
     return Math.round((achieved / total) * 100);
@@ -442,26 +471,45 @@ export const UpdatesPage = () => {
         
         {isAdmin() && (
           <TabsContent value="all">
-            <Card className="border-0 shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckSquare className="h-5 w-5 text-green-600" />
-                  Team Updates
-                </CardTitle>
-                <CardDescription>
-                  {allUpdates.length} total updates from all team members
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {allUpdates.length > 0 ? (
-                  renderUpdatesTable(allUpdates)
-                ) : (
+            {Object.keys(groupedUpdates).length > 0 ? (
+              Object.entries(groupedUpdates).map(([ownerName, objectivesMap]) => (
+                <Card key={ownerName} className="mb-6 border-0 shadow-lg">
+                  <CardHeader>
+                    <CardTitle className="text-xl md:text-2xl">
+                      Updates from: {ownerName}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {Object.entries(objectivesMap).map(([objectiveTitle, updatesForObjective]) => (
+                      <div key={objectiveTitle} className="mb-8 last:mb-0">
+                        <h4 className="text-lg md:text-xl font-semibold mt-2 mb-3 text-slate-800 border-b pb-2">
+                          Objective: {objectiveTitle}
+                        </h4>
+                        {updatesForObjective.length > 0 ? (
+                           renderUpdatesTable(updatesForObjective)
+                        ) : (
+                          <p className="text-sm text-gray-500">No updates for this objective.</p>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card className="border-0 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckSquare className="h-5 w-5 text-green-600" />
+                    Team Updates
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
                   <div className="text-center text-gray-500 py-8 text-sm">
-                    No updates found. Team members can add updates for their objectives.
+                    No updates found from any team members.
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         )}
       </Tabs>
