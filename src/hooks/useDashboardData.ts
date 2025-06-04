@@ -139,7 +139,7 @@ export const useDashboardData = () => {
   });
 
   // Calculate objective statuses
-  const objectiveStatuses: ObjectiveStatus[] = objectives.map(objective => {
+  const groupedObjectiveStatuses: { [ownerName: string]: ObjectiveStatus[] } = objectives.reduce((acc, objective) => {
     const latestUpdate = objective.updates?.reduce((latest: any, update: any) => 
       new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
     , null);
@@ -148,19 +148,28 @@ export const useDashboardData = () => {
       ? Math.min(100, Math.round((latestUpdate.achieved_count / objective.num_activities) * 100))
       : 0;
 
-    return {
+    // Group non-admin objectives under "My Objectives" or handle as per existing logic for non-admins
+    const ownerName = isAdmin() ? objective.owner?.full_name || 'Unassigned' : 'My Objectives';
+
+    const objectiveData: ObjectiveStatus = {
       id: objective.id,
       title: objective.title,
       completion,
       weightage: Number(objective.weightage),
-      ownerName: isAdmin() ? objective.owner?.full_name || 'Unknown' : undefined,
+      ownerName: isAdmin() ? objective.owner?.full_name || 'Unassigned' : undefined, // Keep ownerName for now
     };
-  });
+
+    if (!acc[ownerName]) {
+      acc[ownerName] = [];
+    }
+    acc[ownerName].push(objectiveData);
+    return acc;
+  }, {} as { [ownerName: string]: ObjectiveStatus[] });
 
   return {
     stats,
     teamData,
-    objectiveStatuses,
+    groupedObjectiveStatuses,
     isLoading,
     isAdmin: isAdmin(),
   };

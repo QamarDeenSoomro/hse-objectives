@@ -6,7 +6,7 @@ import { Target, Users, CheckSquare, TrendingUp, User } from "lucide-react";
 import { useDashboardData } from "@/hooks/useDashboardData";
 
 export const Dashboard = () => {
-  const { stats, teamData, objectiveStatuses, isLoading, isAdmin } = useDashboardData();
+  const { stats, teamData, groupedObjectiveStatuses, isLoading, isAdmin } = useDashboardData();
 
   if (isLoading) {
     return (
@@ -157,33 +157,34 @@ export const Dashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {objectiveStatuses.length > 0 ? (
-                objectiveStatuses.map((objective, index) => (
-                  <div key={index} className="space-y-2">
-                    <div className="flex flex-col gap-2">
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-gray-900 text-sm md:text-base block truncate">
-                            {objective.title}
-                          </span>
-                          {isAdmin && objective.ownerName && (
-                            <span className="text-xs text-gray-500">
-                              Owner: {objective.ownerName}
-                            </span>
-                          )}
+            <div className="space-y-6"> {/* Increased spacing for groups */}
+              {Object.keys(groupedObjectiveStatuses).length > 0 ? (
+                Object.entries(groupedObjectiveStatuses).map(([ownerName, objectives]) => (
+                  <div key={ownerName} className="space-y-3">
+                    <h3 className="text-md font-semibold text-gray-800">{ownerName}</h3> {/* Owner heading */}
+                    {objectives.map((objective) => (
+                      <div key={objective.id} className="space-y-2 pl-2 border-l-2 border-gray-200"> {/* Indent objectives under owner, use objective.id */}
+                        <div className="flex flex-col gap-2">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-medium text-gray-900 text-sm md:text-base block truncate">
+                                {objective.title}
+                              </span>
+                              {/* Owner name is now a group heading, no need to repeat if isAdmin */}
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="text-xs md:text-sm text-gray-600">
+                                Weight: {objective.weightage}%
+                              </span>
+                              <Badge variant={objective.completion >= 80 ? "default" : "secondary"} className="text-xs">
+                                {objective.completion}%
+                              </Badge>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-xs md:text-sm text-gray-600">
-                            Weight: {objective.weightage}%
-                          </span>
-                          <Badge variant={objective.completion >= 80 ? "default" : "secondary"} className="text-xs">
-                            {objective.completion}%
-                          </Badge>
-                        </div>
+                        <Progress value={objective.completion} className="h-2" />
                       </div>
-                    </div>
-                    <Progress value={objective.completion} className="h-2" />
+                    ))}
                   </div>
                 ))
               ) : (
