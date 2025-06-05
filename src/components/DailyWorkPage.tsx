@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 export const DailyWorkPage = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile } = useAuth();
   const { dailyWorkEntries, isLoading, deleteDailyWork } = useDailyWorkData();
   const [editingEntry, setEditingEntry] = useState<DailyWorkEntry | null>(null);
   const [commentDialogEntry, setCommentDialogEntry] = useState<DailyWorkEntry | null>(null);
@@ -53,6 +53,11 @@ export const DailyWorkPage = () => {
     setCommentDialogEntry(entry);
   };
 
+  const canEditEntry = (entry: DailyWorkEntry) => {
+    // Users can edit their own entries, admins can edit their own entries
+    return entry.user_id === profile?.id;
+  };
+
   if (isLoading) {
     return (
       <div className="p-4 md:p-6 space-y-6">
@@ -72,7 +77,7 @@ export const DailyWorkPage = () => {
           </h1>
           <p className="text-gray-600 mt-1 text-sm md:text-base">
             {isAdmin() 
-              ? "Review and comment on team daily work entries" 
+              ? "Add your daily work and review team entries" 
               : "Track your daily work activities"
             }
           </p>
@@ -82,11 +87,16 @@ export const DailyWorkPage = () => {
         </Badge>
       </div>
 
-      {/* Add/Edit Form - Only show for regular users or when editing */}
-      {(!isAdmin() || editingEntry) && (
+      {/* Add/Edit Form - Show for all users */}
+      {!editingEntry && (
+        <DailyWorkForm />
+      )}
+
+      {/* Edit Form */}
+      {editingEntry && (
         <DailyWorkForm 
           editEntry={editingEntry} 
-          onCancel={editingEntry ? handleCancelEdit : undefined}
+          onCancel={handleCancelEdit}
         />
       )}
 
@@ -117,7 +127,7 @@ export const DailyWorkPage = () => {
                           })}
                         </CardTitle>
                         <div className="flex items-center gap-2">
-                          {!isAdmin() && (
+                          {canEditEntry(entry) && (
                             <>
                               <Button
                                 size="sm"
@@ -139,7 +149,7 @@ export const DailyWorkPage = () => {
                               </Button>
                             </>
                           )}
-                          {isAdmin() && (
+                          {isAdmin() && !canEditEntry(entry) && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -201,7 +211,7 @@ export const DailyWorkPage = () => {
               <h3 className="text-lg font-medium text-gray-900 mb-2">No daily work entries</h3>
               <p className="text-gray-600">
                 {isAdmin() 
-                  ? "No team members have added daily work entries yet." 
+                  ? "Start by adding your first daily work entry above." 
                   : "Start by adding your first daily work entry above."
                 }
               </p>
