@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Dashboard } from "@/components/Dashboard";
 import { ObjectivesPage } from "@/components/ObjectivesPage";
 import { UpdatesPage } from "@/components/UpdatesPage";
+import { DailyWorkPage } from "@/components/DailyWorkPage";
 import { UsersPage } from "@/components/UsersPage";
 import { ProfilePage } from "@/components/ProfilePage";
 import { LoginPage } from "@/components/LoginPage";
@@ -34,6 +35,8 @@ const AppContent = () => {
         return <ObjectivesPage />;
       case "updates":
         return <UpdatesPage />;
+      case "daily-work":
+        return <DailyWorkPage />;
       case "users":
         return <UsersPage />;
       case "profile":

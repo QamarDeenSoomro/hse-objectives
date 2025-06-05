@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -11,7 +10,8 @@ import {
   User, 
   LogOut,
   Shield,
-  Menu
+  Menu,
+  Calendar
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +28,7 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "objectives", label: "Objectives", icon: Target },
     { id: "updates", label: "Updates", icon: CheckSquare },
+    { id: "daily-work", label: "Daily Work", icon: Calendar },
     ...(isAdmin() ? [{ id: "users", label: "Users", icon: Users }] : []),
     { id: "profile", label: "Profile", icon: User },
   ];

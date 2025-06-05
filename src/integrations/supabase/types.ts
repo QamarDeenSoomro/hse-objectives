@@ -9,6 +9,36 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      daily_work: {
+        Row: {
+          admin_comments: string | null
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+          work_date: string
+          work_description: string
+        }
+        Insert: {
+          admin_comments?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          work_date?: string
+          work_description: string
+        }
+        Update: {
+          admin_comments?: string | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          work_date?: string
+          work_description?: string
+        }
+        Relationships: []
+      }
       objective_updates: {
         Row: {
           achieved_count: number
