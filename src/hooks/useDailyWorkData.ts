@@ -40,7 +40,7 @@ export const useDailyWorkData = () => {
         .from('daily_work')
         .select(`
           *,
-          profiles!inner(full_name, email)
+          profiles!daily_work_user_id_fkey(full_name, email)
         `)
         .order('work_date', { ascending: false });
 

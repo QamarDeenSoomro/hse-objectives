@@ -37,7 +37,15 @@ export type Database = {
           work_date?: string
           work_description?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "daily_work_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       objective_updates: {
         Row: {
