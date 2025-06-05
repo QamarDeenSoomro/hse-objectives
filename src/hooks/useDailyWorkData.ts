@@ -40,7 +40,7 @@ export const useDailyWorkData = () => {
         .from('daily_work')
         .select(`
           *,
-          user:profiles!user_id(full_name, email)
+          profiles!inner(full_name, email)
         `)
         .order('work_date', { ascending: false });
 
@@ -52,7 +52,15 @@ export const useDailyWorkData = () => {
       const { data, error } = await query;
       
       if (error) throw error;
-      return data as DailyWorkEntry[];
+      
+      // Transform the data to match our interface
+      return data.map(entry => ({
+        ...entry,
+        user: entry.profiles ? {
+          full_name: entry.profiles.full_name,
+          email: entry.profiles.email
+        } : undefined
+      })) as DailyWorkEntry[];
     },
     enabled: !!profile,
   });
