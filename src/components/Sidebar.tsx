@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import {
   FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom"; // Add useNavigate
 
 interface SidebarProps {
   currentPage: string;
@@ -24,21 +26,30 @@ interface SidebarProps {
 export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
   const { user, logout, isAdmin } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate(); // Initialize useNavigate
 
-  // "reports" is included only for admin users now
+  // "reports" and "reports-dashboard" are included only for admin users now
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "objectives", label: "Objectives", icon: Target },
     { id: "updates", label: "Updates", icon: CheckSquare },
     { id: "daily-work", label: "Daily Work", icon: Calendar },
     ...(isAdmin() ? [{ id: "reports", label: "Reports", icon: FileText }] : []),
+    // ADD REPORTS DASHBOARD MENU ITEM FOR ADMINS ONLY
+    ...(isAdmin() ? [{ id: "reports-dashboard", label: "Reports Dashboard", icon: LayoutDashboard }] : []),
     ...(isAdmin() ? [{ id: "users", label: "Users", icon: Users }] : []),
     { id: "profile", label: "Profile", icon: User },
   ];
 
   const handleMenuClick = (pageId: string) => {
-    setCurrentPage(pageId);
-    setIsOpen(false);
+    // If the menu item is the /reports-dashboard route, use navigate directly.
+    if (pageId === "reports-dashboard") {
+      setIsOpen(false);
+      navigate("/reports-dashboard");
+    } else {
+      setCurrentPage(pageId);
+      setIsOpen(false);
+    }
   };
 
   const SidebarContent = () => (
@@ -58,8 +69,11 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
       <nav className="flex-1 p-4 space-y-2">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = currentPage === item.id;
-          
+          const isActive = currentPage === item.id || (
+            // For reports-dashboard, highlight if location is /reports-dashboard
+            item.id === "reports-dashboard" && window.location.pathname === "/reports-dashboard"
+          );
+
           return (
             <Button
               key={item.id}
