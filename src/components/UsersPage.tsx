@@ -84,6 +84,14 @@ export const UsersPage = () => {
     }
 
     try {
+      console.log('Attempting to create user via Edge Function');
+      console.log('Request data:', {
+        email: formData.email,
+        fullName: formData.fullName,
+        role: formData.role,
+        hasPassword: !!formData.password
+      });
+
       // Call the Edge Function instead of admin.createUser
       const { data, error } = await supabase.functions.invoke('create-user', {
         body: {
@@ -94,7 +102,17 @@ export const UsersPage = () => {
         }
       });
 
-      if (error) throw error;
+      console.log('Edge Function response:', { data, error });
+
+      if (error) {
+        console.error('Edge Function error:', error);
+        throw new Error(error.message || 'Failed to call Edge Function');
+      }
+
+      if (data?.error) {
+        console.error('Edge Function returned error:', data.error);
+        throw new Error(data.error);
+      }
 
       toast({
         title: "Success",
@@ -106,9 +124,26 @@ export const UsersPage = () => {
       fetchUsers();
     } catch (error: any) {
       console.error('Error creating user:', error);
+      
+      // Provide more detailed error information
+      let errorMessage = "Failed to create user";
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+
+      // Check for specific error types
+      if (errorMessage.includes('Failed to send a request')) {
+        errorMessage = "Unable to connect to user creation service. Please check your internet connection and try again.";
+      } else if (errorMessage.includes('fetch')) {
+        errorMessage = "Network error occurred. Please try again.";
+      }
+
       toast({
         title: "Error",
-        description: error.message || "Failed to create user",
+        description: errorMessage,
         variant: "destructive",
       });
     }
