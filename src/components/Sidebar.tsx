@@ -25,12 +25,13 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
   const { user, logout, isAdmin } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
 
+  // "reports" is included only for admin users now
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "objectives", label: "Objectives", icon: Target },
     { id: "updates", label: "Updates", icon: CheckSquare },
     { id: "daily-work", label: "Daily Work", icon: Calendar },
-    { id: "reports", label: "Reports", icon: FileText },
+    ...(isAdmin() ? [{ id: "reports", label: "Reports", icon: FileText }] : []),
     ...(isAdmin() ? [{ id: "users", label: "Users", icon: Users }] : []),
     { id: "profile", label: "Profile", icon: User },
   ];
