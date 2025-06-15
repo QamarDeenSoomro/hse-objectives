@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.9';
@@ -9,14 +8,15 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('Create user function called with method:', req.method);
-  
-  // Handle CORS preflight requests
+  // Handle CORS preflight requests FIRST, before any logging!
   if (req.method === 'OPTIONS') {
-    console.log('Handling CORS preflight request');
-    return new Response(null, { headers: corsHeaders });
+    // Only log minimal info
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
+  // Now it's safe to log
+  console.log('Create user function called with method:', req.method);
+  
   try {
     // Get the authorization header to verify the requesting user is authenticated
     const authHeader = req.headers.get('Authorization');
