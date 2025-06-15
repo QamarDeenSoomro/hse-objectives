@@ -1,11 +1,18 @@
 
 import jsPDF from 'jspdf';
+// Ensure jsPDF is imported before autotable!
 import 'jspdf-autotable';
 import type { ReportData } from "./index";
 
 export const generatePDF = (reportData: ReportData): jsPDF => {
   const { type, dateFrom, dateTo, data } = reportData;
   const doc = new jsPDF();
+
+  // Defensive: check autoTable attached
+  if (typeof (doc as any).autoTable !== 'function') {
+    throw new Error("jsPDF autoTable plugin is not attached! PDF export cannot continue.");
+  }
+
   try {
     doc.setFontSize(20);
     doc.text('HSE Report', 20, 20);
@@ -15,6 +22,7 @@ export const generatePDF = (reportData: ReportData): jsPDF => {
       doc.text(`Period: ${dateFrom.toLocaleDateString()} - ${dateTo.toLocaleDateString()}`, 20, 45);
     }
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 55);
+
     if (data && data.length > 0) {
       const tableData = data.map(row => Object.values(row).map(value => {
         if (value instanceof Date) return value.toLocaleDateString();
