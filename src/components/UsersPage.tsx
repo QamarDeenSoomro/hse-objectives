@@ -21,7 +21,7 @@ interface UserData {
 }
 
 export const UsersPage = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, session } = useAuth();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -74,31 +74,27 @@ export const UsersPage = () => {
       return;
     }
 
+    if (!session?.access_token) {
+      toast({
+        title: "Error",
+        description: "No valid session found",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: formData.email,
-        password: formData.password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: formData.fullName || formData.email
+      // Call the Edge Function instead of admin.createUser
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: formData.email,
+          password: formData.password,
+          fullName: formData.fullName,
+          role: formData.role
         }
       });
 
-      if (authError) throw authError;
-
-      // Update profile with role
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ 
-            role: formData.role,
-            full_name: formData.fullName || formData.email
-          })
-          .eq('id', authData.user.id);
-
-        if (profileError) throw profileError;
-      }
+      if (error) throw error;
 
       toast({
         title: "Success",
