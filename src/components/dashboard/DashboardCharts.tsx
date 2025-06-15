@@ -39,6 +39,10 @@ const chartConfig = {
     label: "Efficiency",
     color: "hsl(var(--chart-3))",
   },
+  overallStatus: {
+    label: "Overall Status",
+    color: "hsl(var(--chart-4))",
+  },
 };
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
@@ -65,6 +69,13 @@ export const DashboardCharts = ({ data }: DashboardChartsProps) => {
     pending: member.pendingObjectives || 0,
     efficiency: member.efficiency || 0
   }));
+
+  // New: Users overall status percentage data
+  const userStatusData = data.teamPerformance.map(member => ({
+    name: member.teamMember?.substring(0, 20) || 'Unknown',
+    overallPercentage: member.efficiency || 0,
+    status: member.efficiency >= 80 ? 'Excellent' : member.efficiency >= 60 ? 'Good' : member.efficiency >= 40 ? 'Average' : 'Needs Improvement'
+  })).sort((a, b) => b.overallPercentage - a.overallPercentage);
 
   const dailyWorkTrendData = data.dailyWork
     .reduce((acc: any[], item) => {
@@ -106,6 +117,60 @@ export const DashboardCharts = ({ data }: DashboardChartsProps) => {
               <YAxis />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Bar dataKey="completion" fill="#0088FE" radius={4} />
+            </BarChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+
+      {/* Users Overall Status Chart */}
+      <Card className="border-0 shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart className="h-5 w-5 text-indigo-600" />
+            Users Overall Status
+          </CardTitle>
+          <CardDescription>
+            Overall completion percentage by user
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer config={chartConfig} className="h-[300px]">
+            <BarChart data={userStatusData} layout="horizontal">
+              <XAxis type="number" domain={[0, 100]} />
+              <YAxis 
+                dataKey="name" 
+                type="category"
+                tick={{ fontSize: 12 }}
+                width={100}
+              />
+              <ChartTooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div className="bg-white p-3 shadow-lg rounded border">
+                        <p className="font-medium">{label}</p>
+                        <p className="text-sm text-gray-600">
+                          Overall: {data.overallPercentage}%
+                        </p>
+                        <p className="text-sm font-medium" style={{
+                          color: data.overallPercentage >= 80 ? '#10B981' : 
+                                data.overallPercentage >= 60 ? '#F59E0B' : 
+                                data.overallPercentage >= 40 ? '#EF4444' : '#7C2D12'
+                        }}>
+                          Status: {data.status}
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Bar 
+                dataKey="overallPercentage" 
+                fill="#8B5CF6" 
+                radius={4}
+              />
             </BarChart>
           </ChartContainer>
         </CardContent>
