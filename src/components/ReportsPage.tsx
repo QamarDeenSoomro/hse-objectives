@@ -11,7 +11,17 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
-import { generateReportData, generateCSV, generatePDF, downloadFile, ReportData } from "@/utils/reportGenerator";
+import {
+  ReportData,
+  generateCSV,
+  generatePDF,
+  downloadFile,
+  generateObjectiveSummaryData,
+  generateProgressReportData,
+  generateTeamPerformanceData,
+  generateDailyWorkSummaryData,
+  generateActivityTimelineData
+} from "@/utils/reportGenerator";
 import { supabase } from "@/integrations/supabase/client";
 
 interface UserProfile {
@@ -78,12 +88,37 @@ export const ReportsPage = () => {
       });
       return;
     }
-
+    
     setIsGenerating(true);
     try {
-      const reportData = await generateReportData(reportType, dateFrom, dateTo, selectedUser);
+      let data = [];
+      switch (reportType) {
+        case "objectives-summary":
+          data = await generateObjectiveSummaryData(dateFrom, dateTo, selectedUser);
+          break;
+        case "progress-report":
+          data = await generateProgressReportData(dateFrom, dateTo, selectedUser);
+          break;
+        case "team-performance":
+          data = await generateTeamPerformanceData(dateFrom, dateTo, selectedUser);
+          break;
+        case "daily-work-summary":
+          data = await generateDailyWorkSummaryData(dateFrom, dateTo, selectedUser);
+          break;
+        case "activity-timeline":
+          data = await generateActivityTimelineData(dateFrom, dateTo, selectedUser);
+          break;
+        default:
+          data = [];
+      }
+      const reportData: ReportData = {
+        type: reportType,
+        dateFrom,
+        dateTo,
+        user: selectedUser,
+        data,
+      };
       setGeneratedReport(reportData);
-      
       toast({
         title: "Success",
         description: "Report generated successfully! You can now download it in your preferred format.",
