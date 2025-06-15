@@ -11,7 +11,8 @@ import {
   LogOut,
   Shield,
   Menu,
-  Calendar
+  Calendar,
+  FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
     { id: "objectives", label: "Objectives", icon: Target },
     { id: "updates", label: "Updates", icon: CheckSquare },
     { id: "daily-work", label: "Daily Work", icon: Calendar },
+    { id: "reports", label: "Reports", icon: FileText },
     ...(isAdmin() ? [{ id: "users", label: "Users", icon: Users }] : []),
     { id: "profile", label: "Profile", icon: User },
   ];

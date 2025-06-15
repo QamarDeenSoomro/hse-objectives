@@ -5,6 +5,7 @@ import { Dashboard } from "@/components/Dashboard";
 import { ObjectivesPage } from "@/components/ObjectivesPage";
 import { UpdatesPage } from "@/components/UpdatesPage";
 import { DailyWorkPage } from "@/components/DailyWorkPage";
+import { ReportsPage } from "@/components/ReportsPage";
 import { UsersPage } from "@/components/UsersPage";
 import { ProfilePage } from "@/components/ProfilePage";
 import { LoginPage } from "@/components/LoginPage";
@@ -41,6 +42,8 @@ const AppContent = () => {
         return <UpdatesPage />;
       case "daily-work":
         return <DailyWorkPage />;
+      case "reports":
+        return <ReportsPage />;
       case "users":
         return <UsersPage />;
       case "profile":
