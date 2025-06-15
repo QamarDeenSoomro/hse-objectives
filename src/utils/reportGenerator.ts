@@ -1,4 +1,3 @@
-
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { supabase } from "@/integrations/supabase/client";
@@ -106,6 +105,7 @@ type ObjectiveRow = {
   weightage: number;
   created_at: string;
   updated_at: string;
+  created_by: string; // <-- Added to match DB schema and built code
 };
 
 type ProfileRow = {
