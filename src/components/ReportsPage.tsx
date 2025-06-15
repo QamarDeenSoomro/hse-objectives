@@ -117,18 +117,22 @@ export const ReportsPage = () => {
         const csvContent = generateCSV(generatedReport);
         downloadFile(csvContent, filename, 'csv');
       } else if (format === 'pdf') {
+        console.log("[Download PDF] generating PDF", generatedReport);
         const pdfDoc = generatePDF(generatedReport);
+        console.log("[Download PDF] got jsPDF instance", pdfDoc);
         downloadFile(pdfDoc, filename, 'pdf');
+        console.log("[Download PDF] downloadFile called for PDF");
       }
 
       toast({
         title: "Success",
         description: `Report downloaded as ${format.toUpperCase()}`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Download error:", error);
       toast({
         title: "Error",
-        description: `Failed to download ${format.toUpperCase()} report`,
+        description: `Failed to download ${format.toUpperCase()} report: ${error?.message || error}`,
         variant: "destructive"
       });
     }

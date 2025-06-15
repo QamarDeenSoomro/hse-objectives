@@ -36,52 +36,63 @@ export const generateCSV = (reportData: ReportData): string => {
 export const generatePDF = (reportData: ReportData): jsPDF => {
   const { type, dateFrom, dateTo, data } = reportData;
   const doc = new jsPDF();
-  
-  // Add title
-  doc.setFontSize(20);
-  doc.text('HSE Report', 20, 20);
-  
-  // Add report details
-  doc.setFontSize(12);
-  doc.text(`Report Type: ${type.replace(/-/g, ' ').toUpperCase()}`, 20, 35);
-  
-  if (dateFrom && dateTo) {
-    doc.text(`Period: ${dateFrom.toLocaleDateString()} - ${dateTo.toLocaleDateString()}`, 20, 45);
+  try {
+    // Add title
+    doc.setFontSize(20);
+    doc.text('HSE Report', 20, 20);
+
+    // Add report details
+    doc.setFontSize(12);
+    doc.text(`Report Type: ${type.replace(/-/g, ' ').toUpperCase()}`, 20, 35);
+
+    if (dateFrom && dateTo) {
+      doc.text(`Period: ${dateFrom.toLocaleDateString()} - ${dateTo.toLocaleDateString()}`, 20, 45);
+    }
+
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 55);
+
+    // Add table data
+    if (data && data.length > 0) {
+      const tableData = data.map(row => Object.values(row).map(value => {
+        if (value instanceof Date) {
+          return value.toLocaleDateString();
+        }
+        return String(value);
+      }));
+
+      const tableHeaders = Object.keys(data[0]).map(header =>
+        header.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())
+      );
+
+      (doc as any).autoTable({
+        head: [tableHeaders],
+        body: tableData,
+        startY: 70,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [66, 139, 202] }
+      });
+    }
+    console.log("[generatePDF] PDF created successfully:", doc);
+    return doc;
+  } catch (err) {
+    console.error("[generatePDF] PDF generation failed:", err);
+    throw err;
   }
-  
-  doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, 55);
-  
-  // Add table data
-  if (data && data.length > 0) {
-    const tableData = data.map(row => Object.values(row).map(value => {
-      if (value instanceof Date) {
-        return value.toLocaleDateString();
-      }
-      return String(value);
-    }));
-    
-    const tableHeaders = Object.keys(data[0]).map(header => 
-      header.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())
-    );
-    
-    (doc as any).autoTable({
-      head: [tableHeaders],
-      body: tableData,
-      startY: 70,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [66, 139, 202] }
-    });
-  }
-  
-  return doc;
 };
 
 export const downloadFile = (content: string | jsPDF, filename: string, type: 'csv' | 'pdf') => {
   if (type === 'pdf' && content instanceof jsPDF) {
-    content.save(filename);
-    return;
+    try {
+      console.log("[downloadFile] Saving PDF file:", filename, content);
+      content.save(filename);
+      console.log("[downloadFile] PDF save called");
+      return;
+    } catch (err) {
+      console.error("[downloadFile] PDF save failed:", err);
+      throw err;
+    }
   }
-  
+
   if (type === 'csv' && typeof content === 'string') {
     const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
