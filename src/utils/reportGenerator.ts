@@ -262,6 +262,7 @@ export const generateReportData = async (
 
           data.push({
             date: new Date(upd.update_date),
+            user: findDisplayName(user), // <-- Added user name to report row
             activity: obj?.title || "-",
             completion: upd.achieved_count,
             notes: upd.photos && upd.photos.length
