@@ -173,6 +173,23 @@ export const ReportsPage = () => {
     }
   };
 
+  const handleViewDashboard = () => {
+    const params = new URLSearchParams();
+    
+    if (dateFrom) {
+      params.append('dateFrom', dateFrom.toISOString());
+    }
+    if (dateTo) {
+      params.append('dateTo', dateTo.toISOString());
+    }
+    if (selectedUser && selectedUser !== 'all-users') {
+      params.append('user', selectedUser);
+    }
+    
+    const url = `/reports-dashboard?${params.toString()}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -297,6 +314,16 @@ export const ReportsPage = () => {
                   </Select>
                 </div>
               )}
+
+              {/* View Dashboard Button */}
+              <Button
+                onClick={handleViewDashboard}
+                variant="outline"
+                className="w-full border-blue-200 text-blue-700 hover:bg-blue-50"
+              >
+                <BarChart3 className="mr-2 h-4 w-4" />
+                View Dashboard (New Tab)
+              </Button>
 
               {/* Generate Button */}
               <Button
