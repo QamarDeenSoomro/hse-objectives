@@ -27,10 +27,14 @@ const AppContent = () => {
     return <LoginPage />;
   }
 
+  const handleNavigateToObjectives = () => {
+    setCurrentPage("objectives");
+  };
+
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard":
-        return <Dashboard />;
+        return <Dashboard onNavigateToObjectives={handleNavigateToObjectives} />;
       case "objectives":
         return <ObjectivesPage />;
       case "updates":
@@ -42,7 +46,7 @@ const AppContent = () => {
       case "profile":
         return <ProfilePage />;
       default:
-        return <Dashboard />;
+        return <Dashboard onNavigateToObjectives={handleNavigateToObjectives} />;
     }
   };
 

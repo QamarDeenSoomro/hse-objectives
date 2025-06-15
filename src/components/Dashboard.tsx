@@ -1,11 +1,14 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Target, Users, CheckSquare, TrendingUp, User } from "lucide-react";
 import { useDashboardData } from "@/hooks/useDashboardData";
 
-export const Dashboard = () => {
+interface DashboardProps {
+  onNavigateToObjectives?: () => void;
+}
+
+export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
   const { stats, teamData, groupedObjectiveStatuses, isLoading, isAdmin } = useDashboardData();
 
   if (isLoading) {
@@ -39,7 +42,10 @@ export const Dashboard = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-        <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+        <Card 
+          className="border-0 shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white cursor-pointer hover:shadow-xl transition-shadow"
+          onClick={onNavigateToObjectives}
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
               {isAdmin ? "Total Objectives" : "My Objectives"}
