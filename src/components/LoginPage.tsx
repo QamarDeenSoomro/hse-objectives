@@ -65,7 +65,7 @@ export const LoginPage = () => {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@yourdomain.com"
+                placeholder="Enter your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="transition-all duration-200 focus:ring-2 focus:ring-blue-500"
@@ -90,12 +90,6 @@ export const LoginPage = () => {
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
-          
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 font-medium mb-2">Demo Credentials:</p>
-            <p className="text-xs text-gray-500">Admin: admin@yourdomain.com / Qamer@456</p>
-            <p className="text-xs text-gray-500">Create other users in admin panel</p>
-          </div>
         </CardContent>
       </Card>
     </div>
