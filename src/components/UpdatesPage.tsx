@@ -10,7 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, Edit, CheckSquare, Camera, Eye, Trash2 } from "lucide-react";
+import { Plus, Edit, CheckSquare, Camera, Eye, Trash2, User, Target } from "lucide-react";
 import { useUpdatesData } from "@/hooks/useUpdatesData";
 import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
 
@@ -40,6 +40,23 @@ export const UpdatesPage = () => {
   // Filter updates based on user role
   const myUpdates = updates.filter(update => update.user_id === useAuth().profile?.id);
   const allUpdates = updates;
+
+  // Group team updates by user and then by objective
+  const groupedTeamUpdates = allUpdates.reduce((acc, update) => {
+    const userName = update.user?.full_name || update.user?.email || 'Unknown User';
+    const objectiveTitle = update.objective?.title || 'Unknown Objective';
+    
+    if (!acc[userName]) {
+      acc[userName] = {};
+    }
+    
+    if (!acc[userName][objectiveTitle]) {
+      acc[userName][objectiveTitle] = [];
+    }
+    
+    acc[userName][objectiveTitle].push(update);
+    return acc;
+  }, {} as Record<string, Record<string, any[]>>);
 
   const getCompletionPercentage = (achieved: number, total: number) => {
     return Math.round((achieved / total) * 100);
@@ -453,8 +470,35 @@ export const UpdatesPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {allUpdates.length > 0 ? (
-                  renderUpdatesTable(allUpdates)
+                {Object.keys(groupedTeamUpdates).length > 0 ? (
+                  <div className="space-y-8">
+                    {Object.entries(groupedTeamUpdates).map(([userName, userObjectives]) => (
+                      <div key={userName} className="space-y-4">
+                        <div className="flex items-center gap-2 pb-2 border-b">
+                          <User className="h-5 w-5 text-blue-600" />
+                          <h3 className="text-lg font-semibold text-gray-800">{userName}</h3>
+                        </div>
+                        
+                        <div className="space-y-6 ml-6">
+                          {Object.entries(userObjectives).map(([objectiveTitle, objectiveUpdates]) => (
+                            <div key={objectiveTitle} className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <Target className="h-4 w-4 text-green-600" />
+                                <h4 className="font-medium text-gray-700">{objectiveTitle}</h4>
+                                <Badge variant="outline" className="text-xs">
+                                  {objectiveUpdates.length} update{objectiveUpdates.length !== 1 ? 's' : ''}
+                                </Badge>
+                              </div>
+                              
+                              <div className="ml-6">
+                                {renderUpdatesTable(objectiveUpdates)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
                   <div className="text-center text-gray-500 py-8 text-sm">
                     No updates found. Team members can add updates for their objectives.
