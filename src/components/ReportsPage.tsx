@@ -157,7 +157,7 @@ export const ReportsPage = () => {
                       <SelectValue placeholder="All users" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Users</SelectItem>
+                      <SelectItem value="all-users">All Users</SelectItem>
                       <SelectItem value="user1">John Doe</SelectItem>
                       <SelectItem value="user2">Jane Smith</SelectItem>
                       {/* In real implementation, this would be populated from user data */}
