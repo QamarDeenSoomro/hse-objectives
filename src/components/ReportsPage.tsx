@@ -11,14 +11,18 @@ import { CalendarIcon, Download, FileText, BarChart3, Users } from "lucide-react
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { generateReportData, generateCSV, generatePDF, downloadFile, ReportData } from "@/utils/reportGenerator";
 
 export const ReportsPage = () => {
   const { isAdmin } = useAuth();
+  const { toast } = useToast();
   const [reportType, setReportType] = useState("");
   const [dateFrom, setDateFrom] = useState<Date>();
   const [dateTo, setDateTo] = useState<Date>();
   const [selectedUser, setSelectedUser] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedReport, setGeneratedReport] = useState<ReportData | null>(null);
 
   const reportTypes = [
     { value: "objectives-summary", label: "Objectives Summary" },
@@ -29,18 +33,68 @@ export const ReportsPage = () => {
   ];
 
   const handleGenerateReport = async () => {
-    setIsGenerating(true);
-    // Simulate report generation
-    setTimeout(() => {
-      setIsGenerating(false);
-      // Here you would implement actual report generation logic
-      console.log("Generating report:", {
-        type: reportType,
-        dateFrom,
-        dateTo,
-        user: selectedUser
+    if (!reportType) {
+      toast({
+        title: "Error",
+        description: "Please select a report type",
+        variant: "destructive"
       });
-    }, 2000);
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const reportData = await generateReportData(reportType, dateFrom, dateTo, selectedUser);
+      setGeneratedReport(reportData);
+      
+      toast({
+        title: "Success",
+        description: "Report generated successfully! You can now download it in your preferred format.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to generate report. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = (format: 'csv' | 'pdf') => {
+    if (!generatedReport) {
+      toast({
+        title: "Error",
+        description: "Please generate a report first",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `${generatedReport.type}-${timestamp}.${format}`;
+
+    try {
+      if (format === 'csv') {
+        const csvContent = generateCSV(generatedReport);
+        downloadFile(csvContent, filename, 'csv');
+      } else if (format === 'pdf') {
+        const pdfDoc = generatePDF(generatedReport);
+        downloadFile(pdfDoc, filename, 'pdf');
+      }
+
+      toast({
+        title: "Success",
+        description: `Report downloaded as ${format.toUpperCase()}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to download ${format.toUpperCase()} report`,
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -184,6 +238,31 @@ export const ReportsPage = () => {
                   </>
                 )}
               </Button>
+
+              {/* Download Options */}
+              {generatedReport && (
+                <div className="space-y-3 pt-4 border-t">
+                  <Label className="text-sm font-medium">Download Options</Label>
+                  <div className="flex gap-3">
+                    <Button 
+                      onClick={() => handleDownload('csv')}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Download CSV
+                    </Button>
+                    <Button 
+                      onClick={() => handleDownload('pdf')}
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Download PDF
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
