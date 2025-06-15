@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,6 +12,13 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { generateReportData, generateCSV, generatePDF, downloadFile, ReportData } from "@/utils/reportGenerator";
+import { supabase } from "@/integrations/supabase/client";
+
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string | null;
+}
 
 export const ReportsPage = () => {
   const { isAdmin } = useAuth();
@@ -23,6 +29,8 @@ export const ReportsPage = () => {
   const [selectedUser, setSelectedUser] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedReport, setGeneratedReport] = useState<ReportData | null>(null);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const reportTypes = [
     { value: "objectives-summary", label: "Objectives Summary" },
@@ -31,6 +39,35 @@ export const ReportsPage = () => {
     { value: "daily-work-summary", label: "Daily Work Summary" },
     { value: "activity-timeline", label: "Activity Timeline" },
   ];
+
+  // Fetch users when component mounts and user is admin
+  useEffect(() => {
+    if (isAdmin()) {
+      fetchUsers();
+    }
+  }, [isAdmin]);
+
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .order('full_name', { ascending: true });
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch users",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
 
   const handleGenerateReport = async () => {
     if (!reportType) {
@@ -208,13 +245,15 @@ export const ReportsPage = () => {
                   <Label htmlFor="user-filter">Filter by User (Optional)</Label>
                   <Select value={selectedUser} onValueChange={setSelectedUser}>
                     <SelectTrigger>
-                      <SelectValue placeholder="All users" />
+                      <SelectValue placeholder={loadingUsers ? "Loading users..." : "All users"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all-users">All Users</SelectItem>
-                      <SelectItem value="user1">John Doe</SelectItem>
-                      <SelectItem value="user2">Jane Smith</SelectItem>
-                      {/* In real implementation, this would be populated from user data */}
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.full_name || user.email}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
