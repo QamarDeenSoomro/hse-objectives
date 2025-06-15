@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { 
@@ -70,12 +69,17 @@ export const DashboardCharts = ({ data }: DashboardChartsProps) => {
     efficiency: member.efficiency || 0
   }));
 
-  // New: Users overall status percentage data
-  const userStatusData = data.teamPerformance.map(member => ({
-    name: member.teamMember?.substring(0, 20) || 'Unknown',
-    overallPercentage: member.efficiency || 0,
-    status: member.efficiency >= 80 ? 'Excellent' : member.efficiency >= 60 ? 'Good' : member.efficiency >= 40 ? 'Average' : 'Needs Improvement'
-  })).sort((a, b) => b.overallPercentage - a.overallPercentage);
+  // Updated: Users overall status - filter for regular users only and show as horizontal percentage bars
+  const userStatusData = data.teamPerformance
+    .filter(member => member.teamMember && member.teamMember !== 'Admin') // Filter out admin users
+    .map(member => ({
+      name: member.teamMember?.substring(0, 20) || 'Unknown',
+      percentage: member.efficiency || 0,
+      status: member.efficiency >= 80 ? 'Excellent' : 
+              member.efficiency >= 60 ? 'Good' : 
+              member.efficiency >= 40 ? 'Average' : 'Needs Improvement'
+    }))
+    .sort((a, b) => b.percentage - a.percentage); // Sort by percentage descending
 
   const dailyWorkTrendData = data.dailyWork
     .reduce((acc: any[], item) => {
@@ -122,7 +126,7 @@ export const DashboardCharts = ({ data }: DashboardChartsProps) => {
         </CardContent>
       </Card>
 
-      {/* Users Overall Status Chart */}
+      {/* Users Overall Status Chart - Horizontal bars showing user percentages */}
       <Card className="border-0 shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -130,7 +134,7 @@ export const DashboardCharts = ({ data }: DashboardChartsProps) => {
             Users Overall Status
           </CardTitle>
           <CardDescription>
-            Overall completion percentage by user
+            Overall completion percentage by user (horizontal bars)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -141,7 +145,7 @@ export const DashboardCharts = ({ data }: DashboardChartsProps) => {
                 dataKey="name" 
                 type="category"
                 tick={{ fontSize: 12 }}
-                width={100}
+                width={120}
               />
               <ChartTooltip 
                 content={({ active, payload, label }) => {
@@ -151,12 +155,12 @@ export const DashboardCharts = ({ data }: DashboardChartsProps) => {
                       <div className="bg-white p-3 shadow-lg rounded border">
                         <p className="font-medium">{label}</p>
                         <p className="text-sm text-gray-600">
-                          Overall: {data.overallPercentage}%
+                          Completion: {data.percentage}%
                         </p>
                         <p className="text-sm font-medium" style={{
-                          color: data.overallPercentage >= 80 ? '#10B981' : 
-                                data.overallPercentage >= 60 ? '#F59E0B' : 
-                                data.overallPercentage >= 40 ? '#EF4444' : '#7C2D12'
+                          color: data.percentage >= 80 ? '#10B981' : 
+                                data.percentage >= 60 ? '#F59E0B' : 
+                                data.percentage >= 40 ? '#EF4444' : '#7C2D12'
                         }}>
                           Status: {data.status}
                         </p>
@@ -167,7 +171,7 @@ export const DashboardCharts = ({ data }: DashboardChartsProps) => {
                 }}
               />
               <Bar 
-                dataKey="overallPercentage" 
+                dataKey="percentage" 
                 fill="#8B5CF6" 
                 radius={4}
               />
