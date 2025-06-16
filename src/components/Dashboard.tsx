@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -66,7 +67,7 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
           <CardContent>
             <div className="text-xl md:text-2xl font-bold">{stats.averageCompletion}%</div>
             <p className="text-xs text-green-100">
-              {isAdmin ? "Team average" : "My average"}
+              {isAdmin ? "Team average (effective)" : "My average (effective)"}
             </p>
           </CardContent>
         </Card>
@@ -110,8 +111,8 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
             </CardTitle>
             <CardDescription className="text-sm">
               {isAdmin 
-                ? "Individual completion rates and activity counts" 
-                : "Your completion rates and activity counts"
+                ? "Individual effective completion rates and activity counts" 
+                : "Your effective completion rates and activity counts"
               }
             </CardDescription>
           </CardHeader>
@@ -126,7 +127,7 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
                       </span>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="text-xs md:text-sm text-gray-600">
-                          {member.activities} activities
+                          {member.activities} effective activities
                         </span>
                         <Badge variant={member.completion >= 80 ? "default" : "secondary"} className="text-xs">
                           {member.completion}%
@@ -159,7 +160,7 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
               {isAdmin ? "All Objectives Status" : "My Objectives Status"}
             </CardTitle>
             <CardDescription className="text-sm">
-              Current progress on {isAdmin ? "all" : "your"} objectives
+              Current effective progress on {isAdmin ? "all" : "your"} objectives
             </CardDescription>
           </CardHeader>
           <CardContent>
