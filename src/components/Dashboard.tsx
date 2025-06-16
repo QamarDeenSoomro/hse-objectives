@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -111,8 +110,8 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
             </CardTitle>
             <CardDescription className="text-sm">
               {isAdmin 
-                ? "Individual effective completion rates and activity counts" 
-                : "Your effective completion rates and activity counts"
+                ? "Individual objectives average completion rates" 
+                : "Your objectives average completion rates"
               }
             </CardDescription>
           </CardHeader>

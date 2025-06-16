@@ -132,19 +132,38 @@ export const useDashboardData = () => {
     plannedActivities: objectives.reduce((acc, obj) => acc + obj.num_activities, 0),
   };
 
-  // Calculate team performance with efficiency-based progress
+  // Calculate team performance based on objectives average instead of activities
   const teamData: TeamMember[] = allUsers.map(user => {
-    const userUpdates = allUpdates.filter(update => update.user_id === user.id);
     const userObjectives = objectives.filter(obj => obj.owner_id === user.id);
     
-    // Calculate total effective activities completed
+    // Calculate average completion across all objectives for this user
+    let totalCompletion = 0;
+    let objectiveCount = 0;
+    
+    userObjectives.forEach(objective => {
+      const latestUpdate = objective.updates?.reduce((latest: any, update: any) => 
+        new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
+      , null);
+      
+      if (latestUpdate) {
+        const completion = calculateEffectiveProgress(
+          latestUpdate.achieved_count, 
+          objective.num_activities, 
+          latestUpdate.efficiency || 100
+        );
+        totalCompletion += Math.min(100, completion);
+        objectiveCount++;
+      }
+    });
+    
+    const averageCompletion = objectiveCount > 0 ? Math.round(totalCompletion / objectiveCount) : 0;
+    
+    // Calculate total effective activities for display purposes
+    const userUpdates = allUpdates.filter(update => update.user_id === user.id);
     const totalEffectiveActivities = userUpdates.reduce((acc, update) => {
       const effectiveCount = (update.achieved_count * (update.efficiency || 100)) / 100;
       return acc + effectiveCount;
     }, 0);
-    
-    const totalPlanned = userObjectives.reduce((acc, obj) => acc + obj.num_activities, 0);
-    const completion = totalPlanned > 0 ? Math.round((totalEffectiveActivities / totalPlanned) * 100) : 0;
     
     const lastUpdate = userUpdates.reduce((latest, update) => 
       new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
@@ -153,7 +172,7 @@ export const useDashboardData = () => {
     return {
       id: user.id,
       name: user.full_name || user.email,
-      completion: Math.min(100, completion),
+      completion: averageCompletion,
       activities: Math.round(totalEffectiveActivities),
       lastUpdate: lastUpdate?.update_date || new Date().toISOString().split('T')[0],
     };
