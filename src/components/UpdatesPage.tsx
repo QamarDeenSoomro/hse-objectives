@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ export const UpdatesPage = () => {
   const [editFormData, setEditFormData] = useState({
     achievedCount: "",
     updateDate: "",
+    efficiency: "",
   });
   const [selectedPhotos, setSelectedPhotos] = useState<File[]>([]);
   const [editSelectedPhotos, setEditSelectedPhotos] = useState<File[]>([]);
@@ -58,8 +60,10 @@ export const UpdatesPage = () => {
     return acc;
   }, {} as Record<string, Record<string, any[]>>);
 
-  const getCompletionPercentage = (achieved: number, total: number) => {
-    return Math.round((achieved / total) * 100);
+  const getCompletionPercentage = (achieved: number, total: number, efficiency: number = 100) => {
+    const rawProgress = (achieved / total) * 100;
+    const effectiveProgress = (rawProgress * efficiency) / 100;
+    return Math.round(Math.min(100, effectiveProgress));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -92,16 +96,23 @@ export const UpdatesPage = () => {
       return;
     }
 
-    updateUpdate({
+    const updateData: any = {
       id: editingUpdate.id,
       achievedCount: parseInt(editFormData.achievedCount),
       updateDate: editFormData.updateDate,
       photos: editSelectedPhotos,
-    });
+    };
+
+    // Only include efficiency if admin and value is provided
+    if (isAdmin() && editFormData.efficiency) {
+      updateData.efficiency = parseFloat(editFormData.efficiency);
+    }
+
+    updateUpdate(updateData);
 
     setIsEditDialogOpen(false);
     setEditingUpdate(null);
-    setEditFormData({ achievedCount: "", updateDate: "" });
+    setEditFormData({ achievedCount: "", updateDate: "", efficiency: "" });
     setEditSelectedPhotos([]);
   };
 
@@ -120,6 +131,7 @@ export const UpdatesPage = () => {
     setEditFormData({
       achievedCount: update.achieved_count.toString(),
       updateDate: update.update_date,
+      efficiency: update.efficiency?.toString() || "100",
     });
     setEditSelectedPhotos([]);
     setIsEditDialogOpen(true);
@@ -155,102 +167,122 @@ export const UpdatesPage = () => {
           <TableRow>
             <TableHead>Objective</TableHead>
             {isAdmin() && <TableHead>User</TableHead>}
-            <TableHead>Progress</TableHead>
+            <TableHead>Raw Progress</TableHead>
+            <TableHead>Efficiency</TableHead>
+            <TableHead>Effective Progress</TableHead>
             <TableHead>Date</TableHead>
             <TableHead>Photos</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {updatesData.map((update) => (
-            <TableRow key={update.id}>
-              <TableCell>
-                <div className="font-medium">{update.objective?.title}</div>
-              </TableCell>
-              {isAdmin() && (
-                <TableCell className="text-sm text-gray-600">
-                  {update.user?.full_name || update.user?.email}
+          {updatesData.map((update) => {
+            const rawProgress = getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1, 100);
+            const effectiveProgress = getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1, update.efficiency || 100);
+            
+            return (
+              <TableRow key={update.id}>
+                <TableCell>
+                  <div className="font-medium">{update.objective?.title}</div>
                 </TableCell>
-              )}
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">
-                    {update.achieved_count}/{update.objective?.num_activities}
-                  </span>
-                  <Badge 
-                    variant={getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1) >= 80 ? "default" : "secondary"}
-                  >
-                    {getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1)}%
-                  </Badge>
-                </div>
-              </TableCell>
-              <TableCell className="text-sm text-gray-600">
-                {new Date(update.update_date).toLocaleDateString()}
-              </TableCell>
-              <TableCell>
-                {update.photos && update.photos.length > 0 ? (
-                  <Badge variant="outline" className="flex items-center gap-1">
-                    <Camera className="h-3 w-3" />
-                    {update.photos.length}
-                  </Badge>
-                ) : (
-                  <span className="text-gray-400">No photos</span>
+                {isAdmin() && (
+                  <TableCell className="text-sm text-gray-600">
+                    {update.user?.full_name || update.user?.email}
+                  </TableCell>
                 )}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  {isAdmin() && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleViewObjectiveDetails(update.objective_id, update.objective?.title || 'Unknown')}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">
+                      {update.achieved_count}/{update.objective?.num_activities}
+                    </span>
+                    <Badge variant="outline">
+                      {rawProgress}%
+                    </Badge>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge 
+                    variant={update.efficiency >= 80 ? "default" : update.efficiency >= 60 ? "secondary" : "destructive"}
+                  >
+                    {update.efficiency || 100}%
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge 
+                    variant={effectiveProgress >= 80 ? "default" : "secondary"}
+                    className="font-semibold"
+                  >
+                    {effectiveProgress}%
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm text-gray-600">
+                  {new Date(update.update_date).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  {update.photos && update.photos.length > 0 ? (
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      <Camera className="h-3 w-3" />
+                      {update.photos.length}
+                    </Badge>
+                  ) : (
+                    <span className="text-gray-400">No photos</span>
                   )}
-                  {isAdmin() && (
-                    <>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    {isAdmin() && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleEdit(update)}
+                        onClick={() => handleViewObjectiveDetails(update.objective_id, update.objective?.title || 'Unknown')}
                       >
-                        <Edit className="h-4 w-4" />
+                        <Eye className="h-4 w-4" />
                       </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Update</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete this update? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDelete(update.id)}
-                              className="bg-red-600 hover:bg-red-700"
+                    )}
+                    {isAdmin() && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(update)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
                             >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </>
-                  )}
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Update</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this update? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(update.id)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
@@ -396,6 +428,24 @@ export const UpdatesPage = () => {
                 onChange={(e) => setEditFormData(prev => ({ ...prev, updateDate: e.target.value }))}
               />
             </div>
+            {isAdmin() && (
+              <div className="space-y-2">
+                <Label htmlFor="editEfficiency">Efficiency Rating (%)</Label>
+                <Input
+                  id="editEfficiency"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={editFormData.efficiency}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, efficiency: e.target.value }))}
+                  placeholder="Enter efficiency percentage (0-100)"
+                />
+                <p className="text-xs text-gray-500">
+                  This multiplies the user's progress. E.g., 50% efficiency on 20% progress = 10% effective progress
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="editPhotos">Add New Photos (Optional)</Label>
               <Input

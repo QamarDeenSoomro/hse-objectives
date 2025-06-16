@@ -10,6 +10,7 @@ type ObjectiveUpdateRow = {
   update_date: string;
   created_at: string;
   photos: string[] | null;
+  efficiency: number | null;
 };
 
 function dateInRange(dateStr: string, from?: Date, to?: Date): boolean {
@@ -40,18 +41,26 @@ export async function generateProgressReportData(dateFrom?: Date, dateTo?: Date,
   for (const upd of updates) {
     let { data: obj } = await supabase
       .from('objectives')
-      .select('title')
+      .select('title, num_activities')
       .eq('id', upd.objective_id)
       .maybeSingle();
     const user = profileRows.find(p => p.id === upd.user_id);
+    
+    // Calculate effective completion based on efficiency
+    const rawCompletion = obj ? (upd.achieved_count / obj.num_activities) * 100 : 0;
+    const efficiency = upd.efficiency || 100;
+    const effectiveCompletion = (rawCompletion * efficiency) / 100;
+    
     data.push({
       date: new Date(upd.update_date),
       user: findDisplayName(user),
       activity: obj?.title || "-",
-      completion: upd.achieved_count,
+      completion: Math.round(Math.min(100, effectiveCompletion)),
+      rawCompletion: Math.round(rawCompletion),
+      efficiency: efficiency,
       notes: upd.photos && upd.photos.length
-        ? `Photos attached (${upd.photos.length})`
-        : `Updated by ${findDisplayName(user)}`
+        ? `Photos attached (${upd.photos.length}) - Efficiency: ${efficiency}%`
+        : `Updated by ${findDisplayName(user)} - Efficiency: ${efficiency}%`
     });
   }
   return data;

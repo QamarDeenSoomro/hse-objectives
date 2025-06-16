@@ -37,7 +37,7 @@ export const useDashboardData = () => {
         .select(`
           *,
           owner:profiles!owner_id(id, full_name),
-          updates:objective_updates(achieved_count, update_date)
+          updates:objective_updates(achieved_count, update_date, efficiency)
         `);
       
       // If not admin, only show user's own objectives
@@ -98,6 +98,12 @@ export const useDashboardData = () => {
 
   const isLoading = objectivesLoading || usersLoading || updatesLoading;
 
+  // Helper function to calculate effective progress based on efficiency
+  const calculateEffectiveProgress = (achievedCount: number, totalActivities: number, efficiency: number = 100) => {
+    const rawProgress = (achievedCount / totalActivities) * 100;
+    return (rawProgress * efficiency) / 100;
+  };
+
   // Calculate dashboard statistics
   const stats: DashboardStats = {
     totalObjectives: objectives.length,
@@ -106,24 +112,39 @@ export const useDashboardData = () => {
           const latestUpdate = obj.updates?.reduce((latest: any, update: any) => 
             new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
           , null);
-          const completion = latestUpdate 
-            ? Math.min(100, Math.round((latestUpdate.achieved_count / obj.num_activities) * 100))
-            : 0;
+          
+          let completion = 0;
+          if (latestUpdate) {
+            completion = calculateEffectiveProgress(
+              latestUpdate.achieved_count, 
+              obj.num_activities, 
+              latestUpdate.efficiency || 100
+            );
+            completion = Math.min(100, completion);
+          }
           return acc + completion;
         }, 0) / objectives.length)
       : 0,
-    totalActivities: allUpdates.reduce((acc, update) => acc + update.achieved_count, 0),
+    totalActivities: allUpdates.reduce((acc, update) => {
+      const effectiveCount = (update.achieved_count * (update.efficiency || 100)) / 100;
+      return acc + effectiveCount;
+    }, 0),
     plannedActivities: objectives.reduce((acc, obj) => acc + obj.num_activities, 0),
   };
 
-  // Calculate team performance
+  // Calculate team performance with efficiency-based progress
   const teamData: TeamMember[] = allUsers.map(user => {
     const userUpdates = allUpdates.filter(update => update.user_id === user.id);
     const userObjectives = objectives.filter(obj => obj.owner_id === user.id);
     
-    const totalActivities = userUpdates.reduce((acc, update) => acc + update.achieved_count, 0);
+    // Calculate total effective activities completed
+    const totalEffectiveActivities = userUpdates.reduce((acc, update) => {
+      const effectiveCount = (update.achieved_count * (update.efficiency || 100)) / 100;
+      return acc + effectiveCount;
+    }, 0);
+    
     const totalPlanned = userObjectives.reduce((acc, obj) => acc + obj.num_activities, 0);
-    const completion = totalPlanned > 0 ? Math.round((totalActivities / totalPlanned) * 100) : 0;
+    const completion = totalPlanned > 0 ? Math.round((totalEffectiveActivities / totalPlanned) * 100) : 0;
     
     const lastUpdate = userUpdates.reduce((latest, update) => 
       new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
@@ -132,23 +153,28 @@ export const useDashboardData = () => {
     return {
       id: user.id,
       name: user.full_name || user.email,
-      completion: completion,
-      activities: totalActivities,
+      completion: Math.min(100, completion),
+      activities: Math.round(totalEffectiveActivities),
       lastUpdate: lastUpdate?.update_date || new Date().toISOString().split('T')[0],
     };
   });
 
-  // Calculate objective statuses
+  // Calculate objective statuses with efficiency-based completion
   const groupedObjectiveStatuses: { [ownerName: string]: ObjectiveStatus[] } = objectives.reduce((acc, objective) => {
     const latestUpdate = objective.updates?.reduce((latest: any, update: any) => 
       new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
     , null);
     
-    const completion = latestUpdate 
-      ? Math.min(100, Math.round((latestUpdate.achieved_count / objective.num_activities) * 100))
-      : 0;
+    let completion = 0;
+    if (latestUpdate) {
+      completion = calculateEffectiveProgress(
+        latestUpdate.achieved_count, 
+        objective.num_activities, 
+        latestUpdate.efficiency || 100
+      );
+      completion = Math.min(100, Math.round(completion));
+    }
 
-    // Group non-admin objectives under "My Objectives" or handle as per existing logic for non-admins
     const ownerName = isAdmin() ? objective.owner?.full_name || 'Unassigned' : 'My Objectives';
 
     const objectiveData: ObjectiveStatus = {
@@ -156,7 +182,7 @@ export const useDashboardData = () => {
       title: objective.title,
       completion,
       weightage: Number(objective.weightage),
-      ownerName: isAdmin() ? objective.owner?.full_name || 'Unassigned' : undefined, // Keep ownerName for now
+      ownerName: isAdmin() ? objective.owner?.full_name || 'Unassigned' : undefined,
     };
 
     if (!acc[ownerName]) {

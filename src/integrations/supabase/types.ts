@@ -51,6 +51,7 @@ export type Database = {
         Row: {
           achieved_count: number
           created_at: string
+          efficiency: number | null
           id: string
           objective_id: string
           photos: string[] | null
@@ -60,6 +61,7 @@ export type Database = {
         Insert: {
           achieved_count?: number
           created_at?: string
+          efficiency?: number | null
           id?: string
           objective_id: string
           photos?: string[] | null
@@ -69,6 +71,7 @@ export type Database = {
         Update: {
           achieved_count?: number
           created_at?: string
+          efficiency?: number | null
           id?: string
           objective_id?: string
           photos?: string[] | null

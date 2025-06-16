@@ -16,6 +16,7 @@ interface EditUpdateData {
   achievedCount: number;
   updateDate: string;
   photos?: File[];
+  efficiency?: number;
 }
 
 export const useUpdatesData = () => {
@@ -89,7 +90,7 @@ export const useUpdatesData = () => {
         }
       }
 
-      // Create the update record
+      // Create the update record with default efficiency of 100%
       const { data, error } = await supabase
         .from('objective_updates')
         .insert([{
@@ -98,6 +99,7 @@ export const useUpdatesData = () => {
           achieved_count: formData.achievedCount,
           update_date: formData.updateDate,
           photos: photoUrls.length > 0 ? photoUrls : null,
+          efficiency: 100.00, // Default efficiency
         }])
         .select();
 
@@ -165,6 +167,11 @@ export const useUpdatesData = () => {
 
       if (photoUrls.length > 0) {
         updateData.photos = photoUrls;
+      }
+
+      // Only admins can update efficiency
+      if (formData.efficiency !== undefined && isAdmin()) {
+        updateData.efficiency = formData.efficiency;
       }
 
       const { data, error } = await supabase

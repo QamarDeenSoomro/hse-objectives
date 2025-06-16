@@ -50,19 +50,26 @@ export async function generateObjectiveSummaryData(dateFrom?: Date, dateTo?: Dat
       .eq('objective_id', obj.id)
       .order('update_date', { ascending: false })
       .limit(1);
-    let progress = 0;
+    
+    let effectiveProgress = 0;
     let status = "Pending";
+    
     if (updates && updates.length > 0) {
-      progress = updates[0].achieved_count;
-      if (progress >= 100) status = "Completed";
-      else if (progress > 0) status = "In Progress";
+      const latestUpdate = updates[0];
+      const rawProgress = (latestUpdate.achieved_count / obj.num_activities) * 100;
+      const efficiency = latestUpdate.efficiency || 100;
+      effectiveProgress = (rawProgress * efficiency) / 100;
+      
+      if (effectiveProgress >= 100) status = "Completed";
+      else if (effectiveProgress > 0) status = "In Progress";
     }
+    
     const owner = profileRows.find(p => p.id === obj.owner_id);
     data.push({
       id: obj.id,
       title: obj.title,
       status,
-      progress,
+      progress: Math.round(Math.min(100, effectiveProgress)),
       dueDate: new Date(obj.updated_at),
       assignee: findDisplayName(owner),
     });
