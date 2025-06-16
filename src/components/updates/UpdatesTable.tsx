@@ -1,0 +1,156 @@
+
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Edit, CheckSquare, Camera, Eye, Trash2 } from "lucide-react";
+
+interface UpdatesTableProps {
+  updates: any[];
+  isAdmin: boolean;
+  onEdit: (update: any) => void;
+  onDelete: (updateId: string) => void;
+  onViewObjectiveDetails: (objectiveId: string, objectiveTitle: string) => void;
+}
+
+export const UpdatesTable = ({
+  updates,
+  isAdmin,
+  onEdit,
+  onDelete,
+  onViewObjectiveDetails
+}: UpdatesTableProps) => {
+  const getCompletionPercentage = (achieved: number, total: number, efficiency: number = 100) => {
+    const rawProgress = (achieved / total) * 100;
+    const effectiveProgress = (rawProgress * efficiency) / 100;
+    return Math.round(Math.min(100, effectiveProgress));
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Objective</TableHead>
+            {isAdmin && <TableHead>User</TableHead>}
+            <TableHead>Raw Progress</TableHead>
+            <TableHead>Efficiency</TableHead>
+            <TableHead>Effective Progress</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Photos</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {updates.map((update) => {
+            const rawProgress = getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1, 100);
+            const effectiveProgress = getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1, update.efficiency || 100);
+            
+            return (
+              <TableRow key={update.id}>
+                <TableCell>
+                  <div className="font-medium">{update.objective?.title}</div>
+                </TableCell>
+                {isAdmin && (
+                  <TableCell className="text-sm text-gray-600">
+                    {update.user?.full_name || update.user?.email}
+                  </TableCell>
+                )}
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">
+                      {update.achieved_count}/{update.objective?.num_activities}
+                    </span>
+                    <Badge variant="outline">
+                      {rawProgress}%
+                    </Badge>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge 
+                    variant={update.efficiency >= 80 ? "default" : update.efficiency >= 60 ? "secondary" : "destructive"}
+                  >
+                    {update.efficiency || 100}%
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge 
+                    variant={effectiveProgress >= 80 ? "default" : "secondary"}
+                    className="font-semibold"
+                  >
+                    {effectiveProgress}%
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm text-gray-600">
+                  {new Date(update.update_date).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  {update.photos && update.photos.length > 0 ? (
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      <Camera className="h-3 w-3" />
+                      {update.photos.length}
+                    </Badge>
+                  ) : (
+                    <span className="text-gray-400">No photos</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    {isAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onViewObjectiveDetails(update.objective_id, update.objective?.title || 'Unknown')}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {isAdmin && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onEdit(update)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Update</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete this update? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => onDelete(update.id)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+};
