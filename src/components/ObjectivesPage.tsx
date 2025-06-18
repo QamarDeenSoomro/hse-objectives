@@ -486,16 +486,16 @@ export const ObjectivesPage = () => {
             
             {isAdmin() && (
               <div className="text-xs text-gray-500 space-y-1">
-                <div>Owner: {objective.owner?.full_name || objective.owner?.email}</div>
-                <div>Created by: {objective.creator?.full_name || objective.creator?.email}</div>
-                <div>Created: {new Date(objective.created_at).toLocaleDateString()}</div>
+                <div>{objective.owner?.full_name || objective.owner?.email}</div>
+                <div>{objective.creator?.full_name || objective.creator?.email}</div>
+                <div>{new Date(objective.created_at).toLocaleDateString()}</div>
               </div>
             )}
             
             {!isAdmin() && (
               <div className="text-xs text-gray-500 space-y-1">
-                <div>Created by: {objective.creator?.full_name || objective.creator?.email}</div>
-                <div>Created: {new Date(objective.created_at).toLocaleDateString()}</div>
+                <div>{objective.creator?.full_name || objective.creator?.email}</div>
+                <div>{new Date(objective.created_at).toLocaleDateString()}</div>
               </div>
             )}
           </div>
@@ -704,8 +704,6 @@ export const ObjectivesPage = () => {
                         <TableHead>Progress</TableHead>
                         <TableHead>Planned</TableHead>
                         <TableHead>Target Date</TableHead>
-                        <TableHead>Created By</TableHead>
-                        <TableHead>Created Date</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -756,12 +754,6 @@ export const ObjectivesPage = () => {
                                 <Calendar className="h-3 w-3 mr-1" />
                                 {quarterInfo.quarter} {quarterInfo.year}
                               </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-gray-600">
-                              {objective.creator?.full_name || objective.creator?.email}
-                            </TableCell>
-                            <TableCell className="text-sm text-gray-600">
-                              {new Date(objective.created_at).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
@@ -831,8 +823,6 @@ export const ObjectivesPage = () => {
                     <TableHead>Progress</TableHead>
                     <TableHead>Planned</TableHead>
                     <TableHead>Target Date</TableHead>
-                    <TableHead>Created By</TableHead>
-                    <TableHead>Created Date</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -889,12 +879,6 @@ export const ObjectivesPage = () => {
                             <Calendar className="h-3 w-3 mr-1" />
                             {quarterInfo.quarter} {quarterInfo.year}
                           </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-600">
-                          {objective.creator?.full_name || objective.creator?.email}
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-600">
-                          {new Date(objective.created_at).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
                           <Button
