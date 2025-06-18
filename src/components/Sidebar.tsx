@@ -13,7 +13,8 @@ import {
   Menu,
   Calendar,
   FileText,
-  Settings
+  Settings,
+  ClipboardList
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -33,6 +34,7 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "objectives", label: "Objectives", icon: Target },
     { id: "updates", label: "Updates", icon: CheckSquare },
+    { id: "action-items", label: "Action Items", icon: ClipboardList },
     { id: "daily-work", label: "Daily Work", icon: Calendar },
     ...(isAdmin() ? [{ id: "reports", label: "Reports", icon: FileText }] : []),
     ...(isAdmin() ? [{ id: "reports-dashboard", label: "Reports Dashboard", icon: LayoutDashboard }] : []),

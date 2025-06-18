@@ -8,6 +8,7 @@ import { ReportsPage } from "@/components/ReportsPage";
 import { UsersPage } from "@/components/UsersPage";
 import { SuperAdminPage } from "@/components/SuperAdminPage";
 import { ProfilePage } from "@/components/ProfilePage";
+import { ActionItemsPage } from "@/components/actionItems/ActionItemsPage";
 import { LoginPage } from "@/components/LoginPage";
 import { useAuth } from "@/contexts/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
@@ -40,6 +41,8 @@ const Index = () => {
         return <ObjectivesPage />;
       case "updates":
         return <UpdatesPage />;
+      case "action-items":
+        return <ActionItemsPage />;
       case "daily-work":
         return <DailyWorkPage />;
       case "reports":
