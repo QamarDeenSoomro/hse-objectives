@@ -106,14 +106,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
-      // Check if there's a current session before attempting to sign out
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      // Always attempt to sign out - signOut() handles local session clearing regardless
+      const { error } = await supabase.auth.signOut();
       
-      if (currentSession) {
-        // Only attempt server-side logout if a session exists
-        const { error } = await supabase.auth.signOut();
-        
-        if (error) {
+      if (error) {
+        // Handle the specific 'session_not_found' case as informational
+        if (error.message?.includes('session_not_found') || error.message?.includes('Session from session_id claim in JWT does not exist')) {
+          console.info('Session already cleared on server:', error.message);
+        } else {
           console.warn('Logout error:', error);
         }
       }
@@ -124,7 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setProfile(null);
     } catch (error) {
       // Handle any unexpected errors and clear state
-      console.warn('Logout error:', error);
+      console.error('Logout error:', error);
       setSession(null);
       setUser(null);
       setProfile(null);
