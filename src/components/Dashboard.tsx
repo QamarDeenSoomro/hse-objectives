@@ -9,18 +9,18 @@ interface DashboardProps {
   onNavigateToObjectives?: () => void;
 }
 
-// Custom Progress Bar Component with Website Gradient Colors
+// Custom Progress Bar Component with Swapped Colors
 const CustomProgressBar = ({ planned, actual, className = "" }: { planned: number, actual: number, className?: string }) => {
   return (
     <div className={`relative w-full h-2 bg-gray-200 rounded-full overflow-hidden ${className}`}>
-      {/* Planned Progress (Blue-Green Gradient) */}
-      <div 
-        className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 to-green-600 transition-all duration-300"
-        style={{ width: `${Math.min(planned, 100)}%` }}
-      />
-      {/* Actual Progress (Amber/Yellow) */}
+      {/* Planned Progress (Amber/Yellow Gradient) - Now for planned */}
       <div 
         className="absolute top-0 left-0 h-full bg-gradient-to-r from-amber-400 to-yellow-400 transition-all duration-300"
+        style={{ width: `${Math.min(planned, 100)}%` }}
+      />
+      {/* Actual Progress (Blue-Green Gradient) - Now for actual */}
+      <div 
+        className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 to-green-600 transition-all duration-300"
         style={{ width: `${Math.min(actual, 100)}%` }}
       />
     </div>
@@ -166,11 +166,11 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
                       <span>Last update: {new Date(member.lastUpdate).toLocaleDateString()}</span>
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-1">
-                          <div className="w-3 h-2 bg-gradient-to-r from-blue-600 to-green-600 rounded-sm"></div>
+                          <div className="w-3 h-2 bg-gradient-to-r from-amber-400 to-yellow-400 rounded-sm"></div>
                           <span>Planned ({member.plannedProgress}%)</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <div className="w-3 h-2 bg-gradient-to-r from-amber-400 to-yellow-400 rounded-sm"></div>
+                          <div className="w-3 h-2 bg-gradient-to-r from-blue-600 to-green-600 rounded-sm"></div>
                           <span>Achieved ({member.completion}%)</span>
                         </div>
                       </div>
@@ -229,11 +229,11 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
                         <div className="flex items-center justify-between text-xs text-gray-500">
                           <div className="flex items-center gap-3">
                             <div className="flex items-center gap-1">
-                              <div className="w-3 h-2 bg-gradient-to-r from-blue-600 to-green-600 rounded-sm"></div>
+                              <div className="w-3 h-2 bg-gradient-to-r from-amber-400 to-yellow-400 rounded-sm"></div>
                               <span>Planned ({objective.plannedProgress}%)</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <div className="w-3 h-2 bg-gradient-to-r from-amber-400 to-yellow-400 rounded-sm"></div>
+                              <div className="w-3 h-2 bg-gradient-to-r from-blue-600 to-green-600 rounded-sm"></div>
                               <span>Achieved ({objective.completion}%)</span>
                             </div>
                           </div>
