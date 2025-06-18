@@ -105,7 +105,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      // Handle cases where the session is already invalid on the server
+      // The onAuthStateChange listener will still update the local state correctly
+      console.warn('Logout error (session may already be invalid):', error);
+    }
   };
 
   const isAdmin = () => profile?.role === "admin" || profile?.role === "superadmin";
