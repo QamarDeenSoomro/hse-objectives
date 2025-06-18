@@ -47,6 +47,27 @@ const calculatePlannedProgress = (targetDate: string) => {
   return Math.round(Math.max(0, Math.min(100, plannedProgress)));
 };
 
+// Helper function to calculate cumulative progress for an objective
+const calculateCumulativeProgress = (updates: any[], numActivities: number) => {
+  if (!updates || updates.length === 0) return 0;
+  
+  // Sort updates by date to ensure proper cumulative calculation
+  const sortedUpdates = updates.sort((a, b) => new Date(a.update_date).getTime() - new Date(b.update_date).getTime());
+  
+  // Sum all achieved counts to get total cumulative count
+  const totalAchievedCount = sortedUpdates.reduce((total, update) => total + (update.achieved_count || 0), 0);
+  
+  // Calculate raw progress percentage
+  const rawProgress = (totalAchievedCount / numActivities) * 100;
+  
+  // Apply efficiency from the latest update (or 100% if no efficiency set)
+  const latestUpdate = sortedUpdates[sortedUpdates.length - 1];
+  const efficiency = latestUpdate?.efficiency || 100;
+  const effectiveProgress = (rawProgress * efficiency) / 100;
+  
+  return Math.round(Math.min(100, effectiveProgress));
+};
+
 export const useDashboardData = () => {
   const { profile, isAdmin } = useAuth();
 
@@ -119,12 +140,6 @@ export const useDashboardData = () => {
 
   const isLoading = objectivesLoading || usersLoading || updatesLoading;
 
-  // Helper function to calculate effective progress based on efficiency
-  const calculateEffectiveProgress = (achievedCount: number, totalActivities: number, efficiency: number = 100) => {
-    const rawProgress = (achievedCount / totalActivities) * 100;
-    return (rawProgress * efficiency) / 100;
-  };
-
   // Calculate average planned progress across all objectives
   const averagePlannedProgress = objectives.length > 0 
     ? Math.round(objectives.reduce((acc, obj) => {
@@ -133,24 +148,12 @@ export const useDashboardData = () => {
       }, 0) / objectives.length)
     : 0;
 
-  // Calculate dashboard statistics
+  // Calculate dashboard statistics using cumulative progress
   const stats: DashboardStats = {
     totalObjectives: objectives.length,
     averageCompletion: objectives.length > 0 
       ? Math.round(objectives.reduce((acc, obj) => {
-          const latestUpdate = obj.updates?.reduce((latest: any, update: any) => 
-            new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
-          , null);
-          
-          let completion = 0;
-          if (latestUpdate) {
-            completion = calculateEffectiveProgress(
-              latestUpdate.achieved_count, 
-              obj.num_activities, 
-              latestUpdate.efficiency || 100
-            );
-            completion = Math.min(100, completion);
-          }
+          const completion = calculateCumulativeProgress(obj.updates, obj.num_activities);
           return acc + completion;
         }, 0) / objectives.length)
       : 0,
@@ -162,30 +165,17 @@ export const useDashboardData = () => {
     averagePlannedProgress,
   };
 
-  // Calculate team performance based on objectives average instead of activities
+  // Calculate team performance based on objectives average using cumulative progress
   const teamData: TeamMember[] = allUsers.map(user => {
     const userObjectives = objectives.filter(obj => obj.owner_id === user.id);
     
-    // Calculate average completion across all objectives for this user
+    // Calculate average completion across all objectives for this user using cumulative progress
     let totalCompletion = 0;
     let totalPlannedProgress = 0;
     let objectiveCount = userObjectives.length; // Count ALL objectives, even those with 0% progress
     
     userObjectives.forEach(objective => {
-      const latestUpdate = objective.updates?.reduce((latest: any, update: any) => 
-        new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
-      , null);
-      
-      let completion = 0; // Default to 0 for objectives without updates
-      if (latestUpdate) {
-        completion = calculateEffectiveProgress(
-          latestUpdate.achieved_count, 
-          objective.num_activities, 
-          latestUpdate.efficiency || 100
-        );
-        completion = Math.min(100, completion);
-      }
-      
+      const completion = calculateCumulativeProgress(objective.updates, objective.num_activities);
       const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
       
       totalCompletion += completion; // Add completion (0 if no updates) to total
@@ -216,22 +206,9 @@ export const useDashboardData = () => {
     };
   });
 
-  // Calculate objective statuses with efficiency-based completion
+  // Calculate objective statuses with cumulative progress
   const groupedObjectiveStatuses: { [ownerName: string]: ObjectiveStatus[] } = objectives.reduce((acc, objective) => {
-    const latestUpdate = objective.updates?.reduce((latest: any, update: any) => 
-      new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
-    , null);
-    
-    let completion = 0;
-    if (latestUpdate) {
-      completion = calculateEffectiveProgress(
-        latestUpdate.achieved_count, 
-        objective.num_activities, 
-        latestUpdate.efficiency || 100
-      );
-      completion = Math.min(100, Math.round(completion));
-    }
-
+    const completion = calculateCumulativeProgress(objective.updates, objective.num_activities);
     const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
     const ownerName = isAdmin() ? objective.owner?.full_name || 'Unassigned' : 'My Objectives';
 

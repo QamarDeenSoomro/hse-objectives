@@ -89,6 +89,31 @@ export const useUpdatesData = () => {
     }
   };
 
+  // Helper function to calculate cumulative achieved count
+  const calculateCumulativeCount = async (objectiveId: string, excludeUpdateId?: string): Promise<number> => {
+    try {
+      let query = supabase
+        .from('objective_updates')
+        .select('achieved_count')
+        .eq('objective_id', objectiveId)
+        .order('update_date', { ascending: true });
+
+      if (excludeUpdateId) {
+        query = query.neq('id', excludeUpdateId);
+      }
+
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      
+      // Sum all achieved counts to get cumulative total
+      return (data || []).reduce((total, update) => total + update.achieved_count, 0);
+    } catch (error) {
+      console.error('Error calculating cumulative count:', error);
+      return 0;
+    }
+  };
+
   // Create update mutation
   const createUpdateMutation = useMutation({
     mutationFn: async (formData: UpdateFormData) => {
@@ -127,13 +152,14 @@ export const useUpdatesData = () => {
         }
       }
 
-      // Create the update record with default efficiency of 100%
+      // Create the update record with the achieved_count as an incremental value
+      // The achieved_count represents the additional activities completed in this update
       const { data, error } = await supabase
         .from('objective_updates')
         .insert([{
           objective_id: formData.objectiveId,
           user_id: profile?.id,
-          achieved_count: formData.achievedCount,
+          achieved_count: formData.achievedCount, // This is the incremental count for this update
           update_date: formData.updateDate,
           photos: photoUrls.length > 0 ? photoUrls : null,
           efficiency: 100.00, // Default efficiency
@@ -225,9 +251,9 @@ export const useUpdatesData = () => {
         }
       }
 
-      // Update the record
+      // Update the record - achieved_count is still the incremental value for this specific update
       const updateData: any = {
-        achieved_count: formData.achievedCount,
+        achieved_count: formData.achievedCount, // This is the incremental count for this specific update
         update_date: formData.updateDate,
       };
 
@@ -321,5 +347,6 @@ export const useUpdatesData = () => {
     deleteUpdate: deleteUpdateMutation.mutate,
     isDeleting: deleteUpdateMutation.isPending,
     checkUpdateDeadline, // Export the helper function for use in components
+    calculateCumulativeCount, // Export the new helper function
   };
 };

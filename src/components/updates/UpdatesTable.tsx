@@ -20,15 +20,38 @@ export const UpdatesTable = ({
   onDelete,
   onViewObjectiveDetails
 }: UpdatesTableProps) => {
-  const getCompletionPercentage = (achieved: number, total: number, efficiency: number = 100) => {
-    const rawProgress = (achieved / total) * 100;
+  // Helper function to calculate cumulative progress up to a specific update
+  const calculateCumulativeProgress = (currentUpdate: any, allUpdates: any[]) => {
+    // Get all updates for the same objective up to and including the current update
+    const objectiveUpdates = allUpdates
+      .filter(update => update.objective_id === currentUpdate.objective_id)
+      .sort((a, b) => new Date(a.update_date).getTime() - new Date(b.update_date).getTime());
+    
+    // Find the index of the current update
+    const currentIndex = objectiveUpdates.findIndex(update => update.id === currentUpdate.id);
+    
+    // Sum all achieved counts up to and including the current update
+    const cumulativeCount = objectiveUpdates
+      .slice(0, currentIndex + 1)
+      .reduce((total, update) => total + (update.achieved_count || 0), 0);
+    
+    // Calculate cumulative percentage
+    const totalActivities = currentUpdate.objective?.num_activities || 1;
+    const rawProgress = (cumulativeCount / totalActivities) * 100;
+    
+    // Apply efficiency from the current update
+    const efficiency = currentUpdate.efficiency || 100;
     const effectiveProgress = (rawProgress * efficiency) / 100;
-    return Math.round(Math.min(100, effectiveProgress));
+    
+    return {
+      cumulativeCount,
+      rawProgress: Math.round(rawProgress),
+      effectiveProgress: Math.round(Math.min(100, effectiveProgress))
+    };
   };
 
   const UpdateCard = ({ update }: { update: any }) => {
-    const rawProgress = getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1, 100);
-    const effectiveProgress = getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1, update.efficiency || 100);
+    const { cumulativeCount, rawProgress, effectiveProgress } = calculateCumulativeProgress(update, updates);
     
     return (
       <Card className="border border-gray-200">
@@ -74,7 +97,7 @@ export const UpdatesTable = ({
                         <AlertDialogHeader>
                           <AlertDialogTitle>Delete Update</AlertDialogTitle>
                           <AlertDialogDescription>
-                            Are you sure you want to delete this update? This action cannot be undone.
+                            Are you sure you want to delete this update? This action cannot be undone and will affect the cumulative progress calculation.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -95,12 +118,21 @@ export const UpdatesTable = ({
             
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-gray-500">Raw Progress:</span>
+                <span className="text-gray-500">This Update:</span>
                 <div className="flex items-center gap-2 mt-1">
-                  <span>{update.achieved_count}/{update.objective?.num_activities}</span>
+                  <span>{update.achieved_count} activities</span>
+                </div>
+              </div>
+              <div>
+                <span className="text-gray-500">Cumulative:</span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span>{cumulativeCount}/{update.objective?.num_activities}</span>
                   <Badge variant="outline">{rawProgress}%</Badge>
                 </div>
               </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-gray-500">Efficiency:</span>
                 <div className="mt-1">
@@ -111,18 +143,20 @@ export const UpdatesTable = ({
                   </Badge>
                 </div>
               </div>
+              <div>
+                <span className="text-gray-500">Effective Progress:</span>
+                <div className="mt-1">
+                  <Badge 
+                    variant={effectiveProgress >= 80 ? "default" : "secondary"}
+                    className="font-semibold"
+                  >
+                    {effectiveProgress}%
+                  </Badge>
+                </div>
+              </div>
             </div>
             
             <div className="flex flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">Effective Progress:</span>
-                <Badge 
-                  variant={effectiveProgress >= 80 ? "default" : "secondary"}
-                  className="font-semibold"
-                >
-                  {effectiveProgress}%
-                </Badge>
-              </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500">Date:</span>
                 <span className="text-sm">{new Date(update.update_date).toLocaleDateString()}</span>
@@ -149,7 +183,8 @@ export const UpdatesTable = ({
             <TableRow>
               <TableHead>Objective</TableHead>
               {isAdmin && <TableHead>User</TableHead>}
-              <TableHead>Raw Progress</TableHead>
+              <TableHead>This Update</TableHead>
+              <TableHead>Cumulative</TableHead>
               <TableHead>Efficiency</TableHead>
               <TableHead>Effective Progress</TableHead>
               <TableHead>Date</TableHead>
@@ -159,8 +194,7 @@ export const UpdatesTable = ({
           </TableHeader>
           <TableBody>
             {updates.map((update) => {
-              const rawProgress = getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1, 100);
-              const effectiveProgress = getCompletionPercentage(update.achieved_count, update.objective?.num_activities || 1, update.efficiency || 100);
+              const { cumulativeCount, rawProgress, effectiveProgress } = calculateCumulativeProgress(update, updates);
               
               return (
                 <TableRow key={update.id}>
@@ -175,7 +209,14 @@ export const UpdatesTable = ({
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <span className="text-sm">
-                        {update.achieved_count}/{update.objective?.num_activities}
+                        +{update.achieved_count} activities
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">
+                        {cumulativeCount}/{update.objective?.num_activities}
                       </span>
                       <Badge variant="outline">
                         {rawProgress}%
@@ -244,7 +285,7 @@ export const UpdatesTable = ({
                               <AlertDialogHeader>
                                 <AlertDialogTitle>Delete Update</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Are you sure you want to delete this update? This action cannot be undone.
+                                  Are you sure you want to delete this update? This action cannot be undone and will affect the cumulative progress calculation.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>

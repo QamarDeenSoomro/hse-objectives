@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -71,7 +70,7 @@ export const UpdateFormDialog = ({
             Add Progress Update
           </DialogTitle>
           <DialogDescription>
-            Record progress on your assigned objectives
+            Record additional progress on your assigned objectives. Each update adds to your cumulative progress.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -94,15 +93,18 @@ export const UpdateFormDialog = ({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="achievedCount">Activities Completed</Label>
+            <Label htmlFor="achievedCount">Additional Activities Completed</Label>
             <Input
               id="achievedCount"
               type="number"
-              min="0"
+              min="1"
               value={formData.achievedCount}
               onChange={(e) => setFormData(prev => ({ ...prev, achievedCount: e.target.value }))}
-              placeholder="Enter number of completed activities"
+              placeholder="Enter number of additional activities completed"
             />
+            <p className="text-xs text-gray-500">
+              This will be added to your existing progress. For example, if you previously completed 5 activities and now complete 3 more, enter 3.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="updateDate">Update Date</Label>

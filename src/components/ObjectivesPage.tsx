@@ -84,6 +84,37 @@ const calculatePlannedProgress = (targetDate: string) => {
   return Math.round(Math.max(0, Math.min(100, plannedProgress)));
 };
 
+// Helper function to calculate cumulative progress for an objective
+const calculateCumulativeProgress = async (objectiveId: string, numActivities: number) => {
+  try {
+    const { data: updates, error } = await supabase
+      .from('objective_updates')
+      .select('achieved_count, efficiency, update_date')
+      .eq('objective_id', objectiveId)
+      .order('update_date', { ascending: true });
+
+    if (error) throw error;
+
+    if (!updates || updates.length === 0) return 0;
+    
+    // Sum all achieved counts to get total cumulative count
+    const totalAchievedCount = updates.reduce((total, update) => total + (update.achieved_count || 0), 0);
+    
+    // Calculate raw progress percentage
+    const rawProgress = (totalAchievedCount / numActivities) * 100;
+    
+    // Apply efficiency from the latest update (or 100% if no efficiency set)
+    const latestUpdate = updates[updates.length - 1];
+    const efficiency = latestUpdate?.efficiency || 100;
+    const effectiveProgress = (rawProgress * efficiency) / 100;
+    
+    return Math.round(Math.min(100, effectiveProgress));
+  } catch (error) {
+    console.error('Error calculating cumulative progress:', error);
+    return 0;
+  }
+};
+
 // Professional Progress Bar Component with Swapped Colors
 const ProfessionalProgressBar = ({ 
   planned, 
@@ -216,7 +247,7 @@ export const ObjectivesPage = () => {
       if (error) throw error;
       setObjectives(data || []);
       
-      // Fetch progress for each objective
+      // Fetch progress for each objective using cumulative calculation
       if (data) {
         await fetchObjectiveProgress(data);
       }
@@ -237,22 +268,8 @@ export const ObjectivesPage = () => {
     
     for (const objective of objectives) {
       try {
-        const { data: updates } = await supabase
-          .from('objective_updates')
-          .select('achieved_count, efficiency')
-          .eq('objective_id', objective.id)
-          .order('update_date', { ascending: false })
-          .limit(1);
-
-        if (updates && updates.length > 0) {
-          const latestUpdate = updates[0];
-          const rawProgress = (latestUpdate.achieved_count / objective.num_activities) * 100;
-          const efficiency = latestUpdate.efficiency || 100;
-          const effectiveProgress = (rawProgress * efficiency) / 100;
-          progressMap[objective.id] = Math.round(Math.min(100, effectiveProgress));
-        } else {
-          progressMap[objective.id] = 0;
-        }
+        const progress = await calculateCumulativeProgress(objective.id, objective.num_activities);
+        progressMap[objective.id] = progress;
       } catch (error) {
         console.error(`Error fetching progress for objective ${objective.id}:`, error);
         progressMap[objective.id] = 0;
@@ -569,7 +586,7 @@ export const ObjectivesPage = () => {
               <p className="text-gray-600 mt-1 text-sm md:text-base">
                 {userIdFromUrl && filteredUser
                   ? `Viewing objectives assigned to ${filteredUser.full_name || filteredUser.email}`
-                  : "Manage HSE objectives and track progress."
+                  : "Manage HSE objectives and track cumulative progress."
                 }
               </p>
             </div>

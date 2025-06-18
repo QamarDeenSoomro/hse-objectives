@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -86,20 +85,23 @@ export const EditUpdateDialog = ({
             Edit Update
           </DialogTitle>
           <DialogDescription>
-            Modify the progress update details
+            Modify the progress update details. This represents the incremental activities completed in this specific update.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleEditSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="editAchievedCount">Activities Completed</Label>
+            <Label htmlFor="editAchievedCount">Activities Completed (This Update)</Label>
             <Input
               id="editAchievedCount"
               type="number"
               min="0"
               value={editFormData.achievedCount}
               onChange={(e) => setEditFormData(prev => ({ ...prev, achievedCount: e.target.value }))}
-              placeholder="Enter number of completed activities"
+              placeholder="Enter number of activities completed in this update"
             />
+            <p className="text-xs text-gray-500">
+              This is the number of activities completed specifically in this update, not the total cumulative count.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="editUpdateDate">Update Date</Label>
