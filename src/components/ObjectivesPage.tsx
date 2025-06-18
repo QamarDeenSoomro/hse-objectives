@@ -84,7 +84,7 @@ const calculatePlannedProgress = (targetDate: string) => {
   return Math.round(Math.max(0, Math.min(100, plannedProgress)));
 };
 
-// Professional Progress Bar Component
+// Professional Progress Bar Component with Website Gradient Colors
 const ProfessionalProgressBar = ({ 
   planned, 
   actual, 
@@ -99,14 +99,14 @@ const ProfessionalProgressBar = ({
   return (
     <div className={`space-y-2 ${className}`}>
       <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
-        {/* Planned Progress (Green) - Full background */}
+        {/* Planned Progress (Blue-Green Gradient) - Full background */}
         <div 
-          className="absolute top-0 left-0 h-full bg-emerald-500 transition-all duration-500"
+          className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 to-green-600 transition-all duration-500"
           style={{ width: `${Math.min(planned, 100)}%` }}
         />
-        {/* Actual Progress (Yellow/Amber) - Overlaid on top */}
+        {/* Actual Progress (Amber/Yellow Gradient) - Overlaid on top */}
         <div 
-          className="absolute top-0 left-0 h-full bg-amber-400 transition-all duration-500"
+          className="absolute top-0 left-0 h-full bg-gradient-to-r from-amber-400 to-yellow-400 transition-all duration-500"
           style={{ width: `${Math.min(actual, 100)}%` }}
         />
       </div>
@@ -115,11 +115,11 @@ const ProfessionalProgressBar = ({
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
-              <div className="w-3 h-2 bg-emerald-500 rounded-sm border border-emerald-600"></div>
+              <div className="w-3 h-2 bg-gradient-to-r from-blue-600 to-green-600 rounded-sm border border-blue-700"></div>
               <span className="text-gray-600">Planned ({planned}%)</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-3 h-2 bg-amber-400 rounded-sm border border-amber-500"></div>
+              <div className="w-3 h-2 bg-gradient-to-r from-amber-400 to-yellow-400 rounded-sm border border-amber-500"></div>
               <span className="text-gray-600">Achieved ({actual}%)</span>
             </div>
           </div>
