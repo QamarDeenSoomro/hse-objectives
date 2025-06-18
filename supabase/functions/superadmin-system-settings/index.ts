@@ -85,6 +85,8 @@ serve(async (req) => {
             description,
             updated_by: user.id,
             updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'setting_key'
           });
 
         if (updateError) throw updateError;
