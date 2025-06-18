@@ -51,7 +51,7 @@ interface UserData {
 }
 
 export const SuperAdminPage = () => {
-  const { isSuperAdmin, session } = useAuth();
+  const { isSuperAdmin, session, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [systemSettings, setSystemSettings] = useState<SystemSetting[]>([]);
   const [componentPermissions, setComponentPermissions] = useState<ComponentPermission[]>([]);
@@ -59,10 +59,14 @@ export const SuperAdminPage = () => {
   const [newSetting, setNewSetting] = useState({ key: "", value: "", description: "" });
 
   useEffect(() => {
-    if (isSuperAdmin()) {
+    // Only load data when auth is complete and user is confirmed superadmin
+    if (!authLoading && isSuperAdmin()) {
       loadData();
+    } else if (!authLoading && !isSuperAdmin()) {
+      // If auth is complete but user is not superadmin, stop loading
+      setLoading(false);
     }
-  }, [isSuperAdmin]);
+  }, [authLoading, isSuperAdmin]);
 
   const loadData = async () => {
     setLoading(true);
@@ -225,6 +229,15 @@ export const SuperAdminPage = () => {
       });
     }
   };
+
+  // Show loading while auth is still loading
+  if (authLoading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   if (!isSuperAdmin()) {
     return (
