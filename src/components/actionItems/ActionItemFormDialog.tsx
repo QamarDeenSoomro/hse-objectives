@@ -72,6 +72,17 @@ export const ActionItemFormDialog = ({
     onOpenChange(false);
   };
 
+  const handleVerifierChange = (value: string) => {
+    // Map the placeholder value back to empty string
+    const verifierId = value === "no-verifier-selected" ? "" : value;
+    setFormData(prev => ({ ...prev, verifier_id: verifierId }));
+  };
+
+  // Get the display value for the verifier select
+  const getVerifierDisplayValue = () => {
+    return formData.verifier_id === "" ? "no-verifier-selected" : formData.verifier_id;
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
@@ -166,14 +177,14 @@ export const ActionItemFormDialog = ({
           <div className="space-y-2">
             <Label htmlFor="verifier_id">Verifier (Optional)</Label>
             <Select 
-              value={formData.verifier_id} 
-              onValueChange={(value) => setFormData(prev => ({ ...prev, verifier_id: value }))}
+              value={getVerifierDisplayValue()} 
+              onValueChange={handleVerifierChange}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select person responsible for verification" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No verifier required</SelectItem>
+                <SelectItem value="no-verifier-selected">No verifier required</SelectItem>
                 {users.map((user) => (
                   <SelectItem key={user.id} value={user.id}>
                     {user.full_name || user.email}
