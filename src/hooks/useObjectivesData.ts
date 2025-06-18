@@ -6,7 +6,7 @@ import { Objective, UserProfile, ObjectiveFormData } from "@/types/objectives";
 import { calculateCumulativeProgress, getDateFromQuarter, getQuarterInfo } from "@/utils/objectives";
 
 export const useObjectivesData = (userIdFromUrl?: string | null) => {
-  const { isAdmin, profile } = useAuth();
+  const { isAdmin, profile, authLoading } = useAuth();
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,16 +204,32 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
   };
 
   useEffect(() => {
-    fetchObjectives();
-    if (isAdmin()) {
-      fetchUsers();
+    // Only fetch objectives after authentication is complete
+    if (authLoading) {
+      return; // Still loading authentication, don't fetch yet
     }
-  }, [isAdmin, profile, userIdFromUrl]);
+
+    // For admin users, fetch objectives once auth is complete
+    if (isAdmin()) {
+      fetchObjectives();
+      fetchUsers();
+      return;
+    }
+
+    // For non-admin users, ensure profile is available before fetching
+    if (profile && profile.id) {
+      fetchObjectives();
+    } else {
+      // If auth is complete but profile is still not available, set loading to false
+      setLoading(false);
+      console.warn("Authentication complete but user profile not available");
+    }
+  }, [isAdmin, profile, userIdFromUrl, authLoading]);
 
   return {
     objectives,
     users,
-    loading,
+    loading: loading || authLoading, // Include auth loading in the overall loading state
     objectiveProgress,
     createObjective,
     updateObjective,
