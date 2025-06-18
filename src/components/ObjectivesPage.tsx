@@ -210,7 +210,13 @@ export const ObjectivesPage = () => {
   const [filteredUser, setFilteredUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
-    fetchObjectives();
+    // Only fetch objectives if:
+    // 1. User is admin (can fetch all objectives), OR
+    // 2. User is not admin AND profile is loaded (needed for filtering by profile.id)
+    if (isAdmin() || (!isAdmin() && profile?.id)) {
+      fetchObjectives();
+    }
+    
     if (isAdmin()) {
       fetchUsers();
     }
