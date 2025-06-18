@@ -5,18 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar, Clock, ChevronDown, ChevronRight, Camera, User } from "lucide-react";
+import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
+// Types
 interface Objective {
   id: string;
   title: string;
@@ -43,22 +42,27 @@ interface UserProfile {
   full_name: string;
 }
 
-interface ObjectiveUpdate {
-  id: string;
-  achieved_count: number;
-  update_date: string;
-  photos?: string[];
-  efficiency: number;
-  user: {
-    full_name: string;
-    email: string;
-  };
+interface ObjectiveFormData {
+  title: string;
+  description: string;
+  weightage: string;
+  numActivities: string;
+  ownerId: string;
+  targetQuarter: string;
 }
 
-// Helper function to get quarter info from date
+// Constants
+const QUARTERS = [
+  { value: 'Q1', label: 'Q1 2025 (March 31, 2025)' },
+  { value: 'Q2', label: 'Q2 2025 (June 30, 2025)' },
+  { value: 'Q3', label: 'Q3 2025 (September 30, 2025)' },
+  { value: 'Q4', label: 'Q4 2025 (December 31, 2025)' },
+];
+
+// Utility functions
 const getQuarterInfo = (dateString: string) => {
   const date = new Date(dateString);
-  const month = date.getMonth() + 1; // getMonth() returns 0-11
+  const month = date.getMonth() + 1;
   const year = date.getFullYear();
   
   if (month <= 3) return { quarter: 'Q1', year };
@@ -67,27 +71,22 @@ const getQuarterInfo = (dateString: string) => {
   return { quarter: 'Q4', year };
 };
 
-// Helper function to get date from quarter
 const getDateFromQuarter = (quarter: string, year: number = 2025) => {
-  switch (quarter) {
-    case 'Q1': return `${year}-03-31`;
-    case 'Q2': return `${year}-06-30`;
-    case 'Q3': return `${year}-09-30`;
-    case 'Q4': return `${year}-12-31`;
-    default: return `${year}-12-31`;
-  }
+  const quarterDates = {
+    'Q1': `${year}-03-31`,
+    'Q2': `${year}-06-30`,
+    'Q3': `${year}-09-30`,
+    'Q4': `${year}-12-31`,
+  };
+  return quarterDates[quarter as keyof typeof quarterDates] || `${year}-12-31`;
 };
 
-// Helper function to calculate planned progress based on time elapsed
 const calculatePlannedProgress = (targetDate: string) => {
   const startDate = new Date('2025-01-01');
   const endDate = new Date(targetDate);
   const currentDate = new Date();
   
-  // If current date is before start date, planned progress is 0
   if (currentDate < startDate) return 0;
-  
-  // If current date is after end date, planned progress is 100
   if (currentDate > endDate) return 100;
   
   const totalDuration = endDate.getTime() - startDate.getTime();
@@ -97,8 +96,8 @@ const calculatePlannedProgress = (targetDate: string) => {
   return Math.round(Math.max(0, Math.min(100, plannedProgress)));
 };
 
-// Helper function to calculate cumulative progress
-const calculateCumulativeProgress = (updates: ObjectiveUpdate[], numActivities: number) => {
+// Helper function to calculate cumulative progress for an objective
+const calculateCumulativeProgress = (updates: any[], numActivities: number) => {
   if (!updates || updates.length === 0) return 0;
   
   // Sort updates by date to ensure proper cumulative calculation
@@ -118,7 +117,7 @@ const calculateCumulativeProgress = (updates: ObjectiveUpdate[], numActivities: 
   return Math.round(Math.min(100, effectiveProgress));
 };
 
-// Professional Progress Bar Component with Swapped Colors
+// Professional Progress Bar Component
 const ProfessionalProgressBar = ({ 
   planned, 
   actual, 
@@ -133,12 +132,10 @@ const ProfessionalProgressBar = ({
   return (
     <div className={`space-y-2 ${className}`}>
       <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
-        {/* Planned Progress (Amber/Yellow Gradient) - Now for planned */}
         <div 
           className="absolute top-0 left-0 h-full bg-gradient-to-r from-amber-400 to-yellow-400 transition-all duration-500"
           style={{ width: `${Math.min(planned, 100)}%` }}
         />
-        {/* Actual Progress (Blue-Green Gradient) - Now for actual */}
         <div 
           className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 to-green-600 transition-all duration-500"
           style={{ width: `${Math.min(actual, 100)}%` }}
@@ -168,10 +165,129 @@ const ProfessionalProgressBar = ({
   );
 };
 
+// Objective Card Component
+const ObjectiveCard = ({ 
+  objective, 
+  progress, 
+  isAdmin, 
+  onEdit, 
+  onDelete, 
+  onViewUpdates 
+}: {
+  objective: Objective;
+  progress: number;
+  isAdmin: boolean;
+  onEdit: (objective: Objective) => void;
+  onDelete: (id: string) => void;
+  onViewUpdates: (objectiveId: string, objectiveTitle: string) => void;
+}) => {
+  const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
+  const quarterInfo = getQuarterInfo(objective.target_completion_date);
+  
+  return (
+    <Card className="border border-gray-200 hover:shadow-md transition-shadow">
+      <CardContent className="p-4">
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-gray-900 truncate">{objective.title}</h3>
+              <p className="text-sm text-gray-600 mt-1 line-clamp-2">{objective.description}</p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onViewUpdates(objective.id, objective.title)}
+                title="View updates for this objective"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              {isAdmin && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEdit(objective)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => onDelete(objective.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Badge variant="outline" className="text-blue-600 border-blue-600">
+              {objective.weightage}% Weight
+            </Badge>
+            <Badge variant="secondary">
+              {objective.num_activities} activities
+            </Badge>
+            <Badge 
+              variant={progress >= 80 ? "default" : progress >= 50 ? "secondary" : "outline"}
+              className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+            >
+              {progress}% Achieved
+            </Badge>
+            <Badge variant="outline" className="text-purple-600 border-purple-600">
+              <Calendar className="h-3 w-3 mr-1" />
+              {quarterInfo.quarter} {quarterInfo.year}
+            </Badge>
+          </div>
+
+          <div className="space-y-3">
+            <ProfessionalProgressBar 
+              planned={plannedProgress} 
+              actual={progress} 
+              showLabels={true}
+            />
+            
+            {plannedProgress !== progress && (
+              <div className="text-xs text-center">
+                {progress > plannedProgress ? (
+                  <span className="text-emerald-600 font-medium">✓ Ahead of schedule</span>
+                ) : (
+                  <span className="text-red-600 font-medium">⚠ Behind schedule</span>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {isAdmin && (
+            <div className="text-xs text-gray-500 space-y-1">
+              <div>{objective.owner?.full_name || objective.owner?.email}</div>
+              <div>{objective.creator?.full_name || objective.creator?.email}</div>
+              <div>{new Date(objective.created_at).toLocaleDateString()}</div>
+            </div>
+          )}
+          
+          {!isAdmin && (
+            <div className="text-xs text-gray-500 space-y-1">
+              <div>{objective.creator?.full_name || objective.creator?.email}</div>
+              <div>{new Date(objective.created_at).toLocaleDateString()}</div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+// Main Component
 export const ObjectivesPage = () => {
   const { isAdmin, profile } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  
+  // State
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,9 +297,7 @@ export const ObjectivesPage = () => {
   const [selectedObjectiveUpdates, setSelectedObjectiveUpdates] = useState<any[]>([]);
   const [selectedObjectiveTitle, setSelectedObjectiveTitle] = useState("");
   const [objectiveProgress, setObjectiveProgress] = useState<Record<string, number>>({});
-  const [objectiveUpdates, setObjectiveUpdates] = useState<Record<string, ObjectiveUpdate[]>>({});
-  const [expandedObjectives, setExpandedObjectives] = useState<Set<string>>(new Set());
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ObjectiveFormData>({
     title: "",
     description: "",
     weightage: "",
@@ -196,6 +310,7 @@ export const ObjectivesPage = () => {
   const userIdFromUrl = searchParams.get('userId');
   const [filteredUser, setFilteredUser] = useState<UserProfile | null>(null);
 
+  // Effects
   useEffect(() => {
     fetchObjectives();
     if (isAdmin()) {
@@ -204,7 +319,6 @@ export const ObjectivesPage = () => {
   }, [isAdmin, profile, userIdFromUrl]);
 
   useEffect(() => {
-    // Find the filtered user details when userIdFromUrl changes
     if (userIdFromUrl && users.length > 0) {
       const user = users.find(u => u.id === userIdFromUrl);
       setFilteredUser(user || null);
@@ -213,6 +327,7 @@ export const ObjectivesPage = () => {
     }
   }, [userIdFromUrl, users]);
 
+  // Data fetching functions
   const fetchObjectives = async () => {
     try {
       let query = supabase
@@ -226,12 +341,10 @@ export const ObjectivesPage = () => {
 
       // Apply filtering based on user role and URL parameters
       if (isAdmin()) {
-        // Admin can view all objectives or filter by specific user
         if (userIdFromUrl) {
           query = query.eq('owner_id', userIdFromUrl);
         }
       } else {
-        // Non-admin users can only see their own objectives
         if (profile && profile.id) {
           query = query.eq('owner_id', profile.id);
         } else {
@@ -252,10 +365,8 @@ export const ObjectivesPage = () => {
       if (error) throw error;
       setObjectives(data || []);
       
-      // Fetch progress and updates for each objective
       if (data) {
         await fetchObjectiveProgress(data);
-        await fetchObjectiveUpdates(data);
       }
     } catch (error) {
       console.error('Error fetching objectives:', error);
@@ -276,17 +387,13 @@ export const ObjectivesPage = () => {
       try {
         const { data: updates } = await supabase
           .from('objective_updates')
-          .select('achieved_count, efficiency')
+          .select('achieved_count, efficiency, update_date')
           .eq('objective_id', objective.id)
           .order('update_date', { ascending: true });
 
         if (updates && updates.length > 0) {
-          const totalAchievedCount = updates.reduce((total, update) => total + (update.achieved_count || 0), 0);
-          const rawProgress = (totalAchievedCount / objective.num_activities) * 100;
-          const latestUpdate = updates[updates.length - 1];
-          const efficiency = latestUpdate.efficiency || 100;
-          const effectiveProgress = (rawProgress * efficiency) / 100;
-          progressMap[objective.id] = Math.round(Math.min(100, effectiveProgress));
+          const progress = calculateCumulativeProgress(updates, objective.num_activities);
+          progressMap[objective.id] = progress;
         } else {
           progressMap[objective.id] = 0;
         }
@@ -297,40 +404,6 @@ export const ObjectivesPage = () => {
     }
     
     setObjectiveProgress(progressMap);
-  };
-
-  const fetchObjectiveUpdates = async (objectives: Objective[]) => {
-    const updatesMap: Record<string, ObjectiveUpdate[]> = {};
-    
-    for (const objective of objectives) {
-      try {
-        const { data: updates } = await supabase
-          .from('objective_updates')
-          .select(`
-            *,
-            user:profiles!user_id(full_name, email)
-          `)
-          .eq('objective_id', objective.id)
-          .order('update_date', { ascending: false });
-
-        if (updates) {
-          updatesMap[objective.id] = updates.map(update => ({
-            ...update,
-            user: {
-              full_name: update.user?.full_name || '',
-              email: update.user?.email || ''
-            }
-          }));
-        } else {
-          updatesMap[objective.id] = [];
-        }
-      } catch (error) {
-        console.error(`Error fetching updates for objective ${objective.id}:`, error);
-        updatesMap[objective.id] = [];
-      }
-    }
-    
-    setObjectiveUpdates(updatesMap);
   };
 
   const fetchUsers = async () => {
@@ -347,6 +420,7 @@ export const ObjectivesPage = () => {
     }
   };
 
+  // Event handlers
   const handleViewUpdates = async (objectiveId: string, objectiveTitle: string) => {
     try {
       const { data, error } = await supabase
@@ -360,7 +434,6 @@ export const ObjectivesPage = () => {
 
       if (error) throw error;
 
-      // Transform the data to match UpdateDetailDialog expectations
       const transformedUpdates = data.map(update => ({
         ...update,
         user: {
@@ -380,16 +453,6 @@ export const ObjectivesPage = () => {
         variant: "destructive",
       });
     }
-  };
-
-  const toggleObjectiveExpansion = (objectiveId: string) => {
-    const newExpanded = new Set(expandedObjectives);
-    if (newExpanded.has(objectiveId)) {
-      newExpanded.delete(objectiveId);
-    } else {
-      newExpanded.add(objectiveId);
-    }
-    setExpandedObjectives(newExpanded);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -480,6 +543,8 @@ export const ObjectivesPage = () => {
   };
 
   const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this objective?')) return;
+    
     try {
       const { error } = await supabase
         .from('objectives')
@@ -513,184 +578,7 @@ export const ObjectivesPage = () => {
     navigate('/');
   };
 
-  const ObjectiveCard = ({ objective }: { objective: Objective }) => {
-    const progress = objectiveProgress[objective.id] || 0;
-    const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
-    const quarterInfo = getQuarterInfo(objective.target_completion_date);
-    const updates = objectiveUpdates[objective.id] || [];
-    const isExpanded = expandedObjectives.has(objective.id);
-    
-    return (
-      <Card className="border border-gray-200 hover:shadow-md transition-shadow">
-        <CardContent className="p-4">
-          <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-              <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-gray-900 truncate">{objective.title}</h3>
-                <p className="text-sm text-gray-600 mt-1 line-clamp-2">{objective.description}</p>
-              </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => toggleObjectiveExpansion(objective.id)}
-                  title="View updates for this objective"
-                >
-                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                </Button>
-                {isAdmin() && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(objective)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 hover:text-red-700"
-                      onClick={() => handleDelete(objective.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex flex-wrap gap-2 text-sm">
-              <Badge variant="outline" className="text-blue-600 border-blue-600">
-                {objective.weightage}% Weight
-              </Badge>
-              <Badge variant="secondary">
-                {objective.num_activities} activities
-              </Badge>
-              <Badge 
-                variant={progress >= 80 ? "default" : progress >= 50 ? "secondary" : "outline"}
-                className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
-              >
-                {progress}% Achieved
-              </Badge>
-              <Badge variant="outline" className="text-purple-600 border-purple-600">
-                <Calendar className="h-3 w-3 mr-1" />
-                {quarterInfo.quarter} {quarterInfo.year}
-              </Badge>
-            </div>
-
-            {/* Professional Progress Bar */}
-            <div className="space-y-3">
-              <ProfessionalProgressBar 
-                planned={plannedProgress} 
-                actual={progress} 
-                showLabels={true}
-              />
-              
-              {plannedProgress !== progress && (
-                <div className="text-xs text-center">
-                  {progress > plannedProgress ? (
-                    <span className="text-emerald-600 font-medium">✓ Ahead of schedule</span>
-                  ) : (
-                    <span className="text-red-600 font-medium">⚠ Behind schedule</span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Collapsible Updates Section */}
-            {isExpanded && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <Eye className="h-4 w-4" />
-                  Updates ({updates.length})
-                </h4>
-                {updates.length > 0 ? (
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {updates.map((update) => (
-                      <div key={update.id} className="bg-gray-50 p-3 rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <User className="h-3 w-3 text-gray-500" />
-                            <span className="text-sm font-medium text-gray-700">
-                              {update.user.full_name || update.user.email}
-                            </span>
-                          </div>
-                          <span className="text-xs text-gray-500">
-                            {new Date(update.update_date).toLocaleDateString()}
-                          </span>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                          <div>
-                            <span className="text-gray-500">Activities:</span>
-                            <span className="ml-1 font-medium">+{update.achieved_count}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-500">Efficiency:</span>
-                            <span className="ml-1 font-medium">{update.efficiency || 100}%</span>
-                          </div>
-                        </div>
-
-                        {update.photos && update.photos.length > 0 && (
-                          <div className="mt-2">
-                            <div className="flex items-center gap-1 mb-2">
-                              <Camera className="h-3 w-3 text-gray-500" />
-                              <span className="text-xs text-gray-600">
-                                {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1">
-                              {update.photos.slice(0, 3).map((photo, index) => (
-                                <img
-                                  key={index}
-                                  src={photo}
-                                  alt={`Update photo ${index + 1}`}
-                                  className="w-full h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
-                                  onClick={() => window.open(photo, '_blank')}
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = 'none';
-                                  }}
-                                />
-                              ))}
-                              {update.photos.length > 3 && (
-                                <div className="w-full h-16 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-600">
-                                  +{update.photos.length - 3}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500 italic">No updates yet</p>
-                )}
-              </div>
-            )}
-            
-            {isAdmin() && (
-              <div className="text-xs text-gray-500 space-y-1">
-                <div>{objective.owner?.full_name || objective.owner?.email}</div>
-                <div>{objective.creator?.full_name || objective.creator?.email}</div>
-                <div>{new Date(objective.created_at).toLocaleDateString()}</div>
-              </div>
-            )}
-            
-            {!isAdmin() && (
-              <div className="text-xs text-gray-500 space-y-1">
-                <div>{objective.creator?.full_name || objective.creator?.email}</div>
-                <div>{new Date(objective.created_at).toLocaleDateString()}</div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
+  // Render loading state
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center">
@@ -699,8 +587,10 @@ export const ObjectivesPage = () => {
     );
   }
 
+  // Render main component
   return (
     <div className="p-4 md:p-6 space-y-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -725,7 +615,7 @@ export const ObjectivesPage = () => {
               <p className="text-gray-600 mt-1 text-sm md:text-base">
                 {userIdFromUrl && filteredUser
                   ? `Viewing objectives assigned to ${filteredUser.full_name || filteredUser.email}`
-                  : "Manage HSE objectives and track progress. Click the arrow to expand and view updates."
+                  : "Manage HSE objectives and track progress."
                 }
               </p>
             </div>
@@ -736,6 +626,8 @@ export const ObjectivesPage = () => {
             </p>
           )}
         </div>
+        
+        {/* Add Objective Button */}
         {isAdmin() && (
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
@@ -812,10 +704,11 @@ export const ObjectivesPage = () => {
                       <SelectValue placeholder="Select target quarter" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Q1">Q1 2025 (March 31, 2025)</SelectItem>
-                      <SelectItem value="Q2">Q2 2025 (June 30, 2025)</SelectItem>
-                      <SelectItem value="Q3">Q3 2025 (September 30, 2025)</SelectItem>
-                      <SelectItem value="Q4">Q4 2025 (December 31, 2025)</SelectItem>
+                      {QUARTERS.map((quarter) => (
+                        <SelectItem key={quarter.value} value={quarter.value}>
+                          {quarter.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -857,6 +750,7 @@ export const ObjectivesPage = () => {
         )}
       </div>
 
+      {/* Objectives Display */}
       {isAdmin() ? (
         <div className="space-y-6">
           {Object.entries(
@@ -876,7 +770,7 @@ export const ObjectivesPage = () => {
                   Objectives for {ownerName}
                 </CardTitle>
                 <CardDescription>
-                  {ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"} assigned. Click rows to expand and view updates.
+                  {ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"} assigned.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -899,165 +793,77 @@ export const ObjectivesPage = () => {
                         const progress = objectiveProgress[objective.id] || 0;
                         const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
                         const quarterInfo = getQuarterInfo(objective.target_completion_date);
-                        const updates = objectiveUpdates[objective.id] || [];
-                        const isExpanded = expandedObjectives.has(objective.id);
-                        
                         return (
-                          <React.Fragment key={objective.id}>
-                            <TableRow 
-                              className="cursor-pointer hover:bg-gray-50"
-                              onClick={() => toggleObjectiveExpansion(objective.id)}
-                            >
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                                  <div>
-                                    <div className="font-medium">{objective.title}</div>
-                                    <div className="text-sm text-gray-600 max-w-xs truncate">
-                                      {objective.description}
-                                    </div>
-                                  </div>
+                          <TableRow key={objective.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{objective.title}</div>
+                                <div className="text-sm text-gray-600 max-w-xs truncate">
+                                  {objective.description}
                                 </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="text-blue-600 border-blue-600">
-                                  {objective.weightage}%
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="secondary">
-                                  {objective.num_activities} activities
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant={progress >= 80 ? "default" : "secondary"}
-                                  className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-blue-600 border-blue-600">
+                                {objective.weightage}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">
+                                {objective.num_activities} activities
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={progress >= 80 ? "default" : "secondary"}
+                                className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+                              >
+                                {progress}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant="outline" 
+                                className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
+                              >
+                                <Clock className="h-3 w-3 mr-1" />
+                                {plannedProgress}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-purple-600 border-purple-600">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                {quarterInfo.quarter} {quarterInfo.year}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleViewUpdates(objective.id, objective.title)}
+                                  title="View updates for this objective"
                                 >
-                                  {progress}%
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant="outline" 
-                                  className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEdit(objective)}
                                 >
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  {plannedProgress}%
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="text-purple-600 border-purple-600">
-                                  <Calendar className="h-3 w-3 mr-1" />
-                                  {quarterInfo.quarter} {quarterInfo.year}
-                                </Badge>
-                              </TableCell>
-                              <TableCell onClick={(e) => e.stopPropagation()}>
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleViewUpdates(objective.id, objective.title)}
-                                    title="View updates for this objective"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleEdit(objective)}
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-red-600 hover:text-red-700"
-                                    onClick={() => handleDelete(objective.id)}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                            
-                            {/* Collapsible Updates Row */}
-                            {isExpanded && (
-                              <TableRow>
-                                <TableCell colSpan={7} className="bg-gray-50 p-4">
-                                  <div className="space-y-3">
-                                    <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                                      <Eye className="h-4 w-4" />
-                                      Updates ({updates.length})
-                                    </h4>
-                                    {updates.length > 0 ? (
-                                      <div className="grid gap-3 max-h-64 overflow-y-auto">
-                                        {updates.map((update) => (
-                                          <div key={update.id} className="bg-white p-3 rounded border">
-                                            <div className="flex items-start justify-between mb-2">
-                                              <div className="flex items-center gap-2">
-                                                <User className="h-3 w-3 text-gray-500" />
-                                                <span className="text-sm font-medium">
-                                                  {update.user.full_name || update.user.email}
-                                                </span>
-                                              </div>
-                                              <span className="text-xs text-gray-500">
-                                                {new Date(update.update_date).toLocaleDateString()}
-                                              </span>
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                                              <div>
-                                                <span className="text-gray-500">Activities:</span>
-                                                <span className="ml-1 font-medium">+{update.achieved_count}</span>
-                                              </div>
-                                              <div>
-                                                <span className="text-gray-500">Efficiency:</span>
-                                                <span className="ml-1 font-medium">{update.efficiency || 100}%</span>
-                                              </div>
-                                            </div>
-
-                                            {update.photos && update.photos.length > 0 && (
-                                              <div className="mt-2">
-                                                <div className="flex items-center gap-1 mb-2">
-                                                  <Camera className="h-3 w-3 text-gray-500" />
-                                                  <span className="text-xs text-gray-600">
-                                                    {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
-                                                  </span>
-                                                </div>
-                                                <div className="flex gap-1">
-                                                  {update.photos.slice(0, 4).map((photo, index) => (
-                                                    <img
-                                                      key={index}
-                                                      src={photo}
-                                                      alt={`Update photo ${index + 1}`}
-                                                      className="w-12 h-12 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
-                                                      onClick={() => window.open(photo, '_blank')}
-                                                      onError={(e) => {
-                                                        const target = e.target as HTMLImageElement;
-                                                        target.style.display = 'none';
-                                                      }}
-                                                    />
-                                                  ))}
-                                                  {update.photos.length > 4 && (
-                                                    <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-600">
-                                                      +{update.photos.length - 4}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <p className="text-sm text-gray-500 italic">No updates yet</p>
-                                    )}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </React.Fragment>
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
+                                  onClick={() => handleDelete(objective.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
                         );
                       })}
                     </TableBody>
@@ -1067,7 +873,15 @@ export const ObjectivesPage = () => {
                 {/* Mobile Card View */}
                 <div className="lg:hidden space-y-4">
                   {ownerObjectives.map((objective) => (
-                    <ObjectiveCard key={objective.id} objective={objective} />
+                    <ObjectiveCard 
+                      key={objective.id} 
+                      objective={objective}
+                      progress={objectiveProgress[objective.id] || 0}
+                      isAdmin={isAdmin()}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onViewUpdates={handleViewUpdates}
+                    />
                   ))}
                 </div>
               </CardContent>
@@ -1082,7 +896,7 @@ export const ObjectivesPage = () => {
               My Objectives
             </CardTitle>
             <CardDescription>
-              {objectives.length} {objectives.length === 1 ? "objective" : "objectives"} configured. Click to expand and view updates.
+              {objectives.length} {objectives.length === 1 ? "objective" : "objectives"} configured
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1106,154 +920,66 @@ export const ObjectivesPage = () => {
                     const progress = objectiveProgress[objective.id] || 0;
                     const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
                     const quarterInfo = getQuarterInfo(objective.target_completion_date);
-                    const updates = objectiveUpdates[objective.id] || [];
-                    const isExpanded = expandedObjectives.has(objective.id);
-                    
                     return (
-                      <React.Fragment key={objective.id}>
-                        <TableRow 
-                          className="cursor-pointer hover:bg-gray-50"
-                          onClick={() => toggleObjectiveExpansion(objective.id)}
-                        >
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                              <div>
-                                <div className="font-medium">{objective.title}</div>
-                                <div className="text-sm text-gray-600 max-w-xs truncate">
-                                  {objective.description}
-                                </div>
-                              </div>
+                      <TableRow key={objective.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{objective.title}</div>
+                            <div className="text-sm text-gray-600 max-w-xs truncate">
+                              {objective.description}
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="text-sm">
-                              <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
-                              <div className="text-gray-600">{objective.owner?.email}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-blue-600 border-blue-600">
-                              {objective.weightage}%
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {objective.num_activities} activities
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant={progress >= 80 ? "default" : "secondary"}
-                              className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
-                            >
-                              {progress}%
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant="outline" 
-                              className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
-                            >
-                              <Clock className="h-3 w-3 mr-1" />
-                              {plannedProgress}%
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-purple-600 border-purple-600">
-                              <Calendar className="h-3 w-3 mr-1" />
-                              {quarterInfo.quarter} {quarterInfo.year}
-                            </Badge>
-                          </TableCell>
-                          <TableCell onClick={(e) => e.stopPropagation()}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewUpdates(objective.id, objective.title)}
-                              title="View updates for this objective"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                        
-                        {/* Collapsible Updates Row */}
-                        {isExpanded && (
-                          <TableRow>
-                            <TableCell colSpan={8} className="bg-gray-50 p-4">
-                              <div className="space-y-3">
-                                <h4 className="font-medium text-gray-900 flex items-center gap-2">
-                                  <Eye className="h-4 w-4" />
-                                  Updates ({updates.length})
-                                </h4>
-                                {updates.length > 0 ? (
-                                  <div className="grid gap-3 max-h-64 overflow-y-auto">
-                                    {updates.map((update) => (
-                                      <div key={update.id} className="bg-white p-3 rounded border">
-                                        <div className="flex items-start justify-between mb-2">
-                                          <div className="flex items-center gap-2">
-                                            <User className="h-3 w-3 text-gray-500" />
-                                            <span className="text-sm font-medium">
-                                              {update.user.full_name || update.user.email}
-                                            </span>
-                                          </div>
-                                          <span className="text-xs text-gray-500">
-                                            {new Date(update.update_date).toLocaleDateString()}
-                                          </span>
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                                          <div>
-                                            <span className="text-gray-500">Activities:</span>
-                                            <span className="ml-1 font-medium">+{update.achieved_count}</span>
-                                          </div>
-                                          <div>
-                                            <span className="text-gray-500">Efficiency:</span>
-                                            <span className="ml-1 font-medium">{update.efficiency || 100}%</span>
-                                          </div>
-                                        </div>
-
-                                        {update.photos && update.photos.length > 0 && (
-                                          <div className="mt-2">
-                                            <div className="flex items-center gap-1 mb-2">
-                                              <Camera className="h-3 w-3 text-gray-500" />
-                                              <span className="text-xs text-gray-600">
-                                                {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
-                                              </span>
-                                            </div>
-                                            <div className="flex gap-1">
-                                              {update.photos.slice(0, 4).map((photo, index) => (
-                                                <img
-                                                  key={index}
-                                                  src={photo}
-                                                  alt={`Update photo ${index + 1}`}
-                                                  className="w-12 h-12 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
-                                                  onClick={() => window.open(photo, '_blank')}
-                                                  onError={(e) => {
-                                                    const target = e.target as HTMLImageElement;
-                                                    target.style.display = 'none';
-                                                  }}
-                                                />
-                                              ))}
-                                              {update.photos.length > 4 && (
-                                                <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-600">
-                                                  +{update.photos.length - 4}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-gray-500 italic">No updates yet</p>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </React.Fragment>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
+                            <div className="text-gray-600">{objective.owner?.email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-blue-600 border-blue-600">
+                            {objective.weightage}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {objective.num_activities} activities
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={progress >= 80 ? "default" : "secondary"}
+                            className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+                          >
+                            {progress}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="outline" 
+                            className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
+                          >
+                            <Clock className="h-3 w-3 mr-1" />
+                            {plannedProgress}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-purple-600 border-purple-600">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            {quarterInfo.quarter} {quarterInfo.year}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewUpdates(objective.id, objective.title)}
+                            title="View updates for this objective"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
                 </TableBody>
@@ -1263,7 +989,15 @@ export const ObjectivesPage = () => {
             {/* Mobile Card View */}
             <div className="lg:hidden space-y-4">
               {objectives.map((objective) => (
-                <ObjectiveCard key={objective.id} objective={objective} />
+                <ObjectiveCard 
+                  key={objective.id} 
+                  objective={objective}
+                  progress={objectiveProgress[objective.id] || 0}
+                  isAdmin={isAdmin()}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onViewUpdates={handleViewUpdates}
+                />
               ))}
             </div>
           </CardContent>
