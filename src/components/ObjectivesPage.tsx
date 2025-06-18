@@ -13,7 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar, Clock, ChevronDown, ChevronRight, Camera } from "lucide-react";
+import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar, Clock, ChevronDown, ChevronRight, Camera, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
@@ -45,14 +45,11 @@ interface UserProfile {
 
 interface ObjectiveUpdate {
   id: string;
-  objective_id: string;
-  user_id: string;
   achieved_count: number;
   update_date: string;
+  photos?: string[];
   efficiency: number;
-  photos: string[] | null;
-  created_at: string;
-  user?: {
+  user: {
     full_name: string;
     email: string;
   };
@@ -100,35 +97,25 @@ const calculatePlannedProgress = (targetDate: string) => {
   return Math.round(Math.max(0, Math.min(100, plannedProgress)));
 };
 
-// Helper function to calculate cumulative progress for an objective
-const calculateCumulativeProgress = async (objectiveId: string, numActivities: number) => {
-  try {
-    const { data: updates, error } = await supabase
-      .from('objective_updates')
-      .select('achieved_count, efficiency, update_date')
-      .eq('objective_id', objectiveId)
-      .order('update_date', { ascending: true });
-
-    if (error) throw error;
-
-    if (!updates || updates.length === 0) return 0;
-    
-    // Sum all achieved counts to get total cumulative count
-    const totalAchievedCount = updates.reduce((total, update) => total + (update.achieved_count || 0), 0);
-    
-    // Calculate raw progress percentage
-    const rawProgress = (totalAchievedCount / numActivities) * 100;
-    
-    // Apply efficiency from the latest update (or 100% if no efficiency set)
-    const latestUpdate = updates[updates.length - 1];
-    const efficiency = latestUpdate?.efficiency || 100;
-    const effectiveProgress = (rawProgress * efficiency) / 100;
-    
-    return Math.round(Math.min(100, effectiveProgress));
-  } catch (error) {
-    console.error('Error calculating cumulative progress:', error);
-    return 0;
-  }
+// Helper function to calculate cumulative progress
+const calculateCumulativeProgress = (updates: ObjectiveUpdate[], numActivities: number) => {
+  if (!updates || updates.length === 0) return 0;
+  
+  // Sort updates by date to ensure proper cumulative calculation
+  const sortedUpdates = updates.sort((a, b) => new Date(a.update_date).getTime() - new Date(b.update_date).getTime());
+  
+  // Sum all achieved counts to get total cumulative count
+  const totalAchievedCount = sortedUpdates.reduce((total, update) => total + (update.achieved_count || 0), 0);
+  
+  // Calculate raw progress percentage
+  const rawProgress = (totalAchievedCount / numActivities) * 100;
+  
+  // Apply efficiency from the latest update (or 100% if no efficiency set)
+  const latestUpdate = sortedUpdates[sortedUpdates.length - 1];
+  const efficiency = latestUpdate?.efficiency || 100;
+  const effectiveProgress = (rawProgress * efficiency) / 100;
+  
+  return Math.round(Math.min(100, effectiveProgress));
 };
 
 // Professional Progress Bar Component with Swapped Colors
@@ -194,8 +181,8 @@ export const ObjectivesPage = () => {
   const [selectedObjectiveUpdates, setSelectedObjectiveUpdates] = useState<any[]>([]);
   const [selectedObjectiveTitle, setSelectedObjectiveTitle] = useState("");
   const [objectiveProgress, setObjectiveProgress] = useState<Record<string, number>>({});
-  const [expandedObjectives, setExpandedObjectives] = useState<Set<string>>(new Set());
   const [objectiveUpdates, setObjectiveUpdates] = useState<Record<string, ObjectiveUpdate[]>>({});
+  const [expandedObjectives, setExpandedObjectives] = useState<Set<string>>(new Set());
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -210,13 +197,7 @@ export const ObjectivesPage = () => {
   const [filteredUser, setFilteredUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
-    // Only fetch objectives if:
-    // 1. User is admin (can fetch all objectives), OR
-    // 2. User is not admin AND profile is loaded (needed for filtering by profile.id)
-    if (isAdmin() || (!isAdmin() && profile?.id)) {
-      fetchObjectives();
-    }
-    
+    fetchObjectives();
     if (isAdmin()) {
       fetchUsers();
     }
@@ -271,9 +252,10 @@ export const ObjectivesPage = () => {
       if (error) throw error;
       setObjectives(data || []);
       
-      // Fetch progress for each objective using cumulative calculation
+      // Fetch progress and updates for each objective
       if (data) {
         await fetchObjectiveProgress(data);
+        await fetchObjectiveUpdates(data);
       }
     } catch (error) {
       console.error('Error fetching objectives:', error);
@@ -292,8 +274,22 @@ export const ObjectivesPage = () => {
     
     for (const objective of objectives) {
       try {
-        const progress = await calculateCumulativeProgress(objective.id, objective.num_activities);
-        progressMap[objective.id] = progress;
+        const { data: updates } = await supabase
+          .from('objective_updates')
+          .select('achieved_count, efficiency')
+          .eq('objective_id', objective.id)
+          .order('update_date', { ascending: true });
+
+        if (updates && updates.length > 0) {
+          const totalAchievedCount = updates.reduce((total, update) => total + (update.achieved_count || 0), 0);
+          const rawProgress = (totalAchievedCount / objective.num_activities) * 100;
+          const latestUpdate = updates[updates.length - 1];
+          const efficiency = latestUpdate.efficiency || 100;
+          const effectiveProgress = (rawProgress * efficiency) / 100;
+          progressMap[objective.id] = Math.round(Math.min(100, effectiveProgress));
+        } else {
+          progressMap[objective.id] = 0;
+        }
       } catch (error) {
         console.error(`Error fetching progress for objective ${objective.id}:`, error);
         progressMap[objective.id] = 0;
@@ -303,83 +299,38 @@ export const ObjectivesPage = () => {
     setObjectiveProgress(progressMap);
   };
 
-  const fetchObjectiveUpdates = async (objectiveId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('objective_updates')
-        .select(`
-          *,
-          user:profiles!user_id(full_name, email)
-        `)
-        .eq('objective_id', objectiveId)
-        .order('update_date', { ascending: false });
-
-      if (error) throw error;
-
-      // Transform the data to match our interface
-      const transformedUpdates = data.map(update => ({
-        ...update,
-        user: {
-          full_name: update.user?.full_name || '',
-          email: update.user?.email || ''
-        }
-      })) as ObjectiveUpdate[];
-
-      setObjectiveUpdates(prev => ({
-        ...prev,
-        [objectiveId]: transformedUpdates
-      }));
-    } catch (error) {
-      console.error('Error fetching objective updates:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch objective updates",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const toggleObjectiveExpansion = async (objectiveId: string) => {
-    const newExpanded = new Set(expandedObjectives);
+  const fetchObjectiveUpdates = async (objectives: Objective[]) => {
+    const updatesMap: Record<string, ObjectiveUpdate[]> = {};
     
-    if (newExpanded.has(objectiveId)) {
-      newExpanded.delete(objectiveId);
-    } else {
-      newExpanded.add(objectiveId);
-      // Fetch updates if not already loaded
-      if (!objectiveUpdates[objectiveId]) {
-        await fetchObjectiveUpdates(objectiveId);
+    for (const objective of objectives) {
+      try {
+        const { data: updates } = await supabase
+          .from('objective_updates')
+          .select(`
+            *,
+            user:profiles!user_id(full_name, email)
+          `)
+          .eq('objective_id', objective.id)
+          .order('update_date', { ascending: false });
+
+        if (updates) {
+          updatesMap[objective.id] = updates.map(update => ({
+            ...update,
+            user: {
+              full_name: update.user?.full_name || '',
+              email: update.user?.email || ''
+            }
+          }));
+        } else {
+          updatesMap[objective.id] = [];
+        }
+      } catch (error) {
+        console.error(`Error fetching updates for objective ${objective.id}:`, error);
+        updatesMap[objective.id] = [];
       }
     }
     
-    setExpandedObjectives(newExpanded);
-  };
-
-  const calculateCumulativeProgressForUpdate = (updates: ObjectiveUpdate[], currentUpdateIndex: number, numActivities: number) => {
-    // Sort updates by date to ensure proper cumulative calculation
-    const sortedUpdates = [...updates].sort((a, b) => new Date(a.update_date).getTime() - new Date(b.update_date).getTime());
-    
-    // Find the current update in the sorted array
-    const currentUpdate = updates[currentUpdateIndex];
-    const sortedIndex = sortedUpdates.findIndex(u => u.id === currentUpdate.id);
-    
-    // Sum all achieved counts up to and including the current update
-    const cumulativeCount = sortedUpdates
-      .slice(0, sortedIndex + 1)
-      .reduce((total, update) => total + (update.achieved_count || 0), 0);
-    
-    // Calculate cumulative percentage
-    const rawProgress = (cumulativeCount / numActivities) * 100;
-    
-    // Apply efficiency from the current update
-    const efficiency = currentUpdate.efficiency || 100;
-    const effectiveProgress = (rawProgress * efficiency) / 100;
-    
-    return {
-      cumulativeCount,
-      rawProgress: Math.round(rawProgress),
-      effectiveProgress: Math.round(Math.min(100, effectiveProgress))
-    };
+    setObjectiveUpdates(updatesMap);
   };
 
   const fetchUsers = async () => {
@@ -429,6 +380,16 @@ export const ObjectivesPage = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const toggleObjectiveExpansion = (objectiveId: string) => {
+    const newExpanded = new Set(expandedObjectives);
+    if (newExpanded.has(objectiveId)) {
+      newExpanded.delete(objectiveId);
+    } else {
+      newExpanded.add(objectiveId);
+    }
+    setExpandedObjectives(newExpanded);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -556,6 +517,8 @@ export const ObjectivesPage = () => {
     const progress = objectiveProgress[objective.id] || 0;
     const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
     const quarterInfo = getQuarterInfo(objective.target_completion_date);
+    const updates = objectiveUpdates[objective.id] || [];
+    const isExpanded = expandedObjectives.has(objective.id);
     
     return (
       <Card className="border border-gray-200 hover:shadow-md transition-shadow">
@@ -570,10 +533,10 @@ export const ObjectivesPage = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleViewUpdates(objective.id, objective.title)}
+                  onClick={() => toggleObjectiveExpansion(objective.id)}
                   title="View updates for this objective"
                 >
-                  <Eye className="h-4 w-4" />
+                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 </Button>
                 {isAdmin() && (
                   <>
@@ -634,6 +597,79 @@ export const ObjectivesPage = () => {
                 </div>
               )}
             </div>
+
+            {/* Collapsible Updates Section */}
+            {isExpanded && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                  <Eye className="h-4 w-4" />
+                  Updates ({updates.length})
+                </h4>
+                {updates.length > 0 ? (
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {updates.map((update) => (
+                      <div key={update.id} className="bg-gray-50 p-3 rounded-lg">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <User className="h-3 w-3 text-gray-500" />
+                            <span className="text-sm font-medium text-gray-700">
+                              {update.user.full_name || update.user.email}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {new Date(update.update_date).toLocaleDateString()}
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                          <div>
+                            <span className="text-gray-500">Activities:</span>
+                            <span className="ml-1 font-medium">+{update.achieved_count}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Efficiency:</span>
+                            <span className="ml-1 font-medium">{update.efficiency || 100}%</span>
+                          </div>
+                        </div>
+
+                        {update.photos && update.photos.length > 0 && (
+                          <div className="mt-2">
+                            <div className="flex items-center gap-1 mb-2">
+                              <Camera className="h-3 w-3 text-gray-500" />
+                              <span className="text-xs text-gray-600">
+                                {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1">
+                              {update.photos.slice(0, 3).map((photo, index) => (
+                                <img
+                                  key={index}
+                                  src={photo}
+                                  alt={`Update photo ${index + 1}`}
+                                  className="w-full h-16 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => window.open(photo, '_blank')}
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                  }}
+                                />
+                              ))}
+                              {update.photos.length > 3 && (
+                                <div className="w-full h-16 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-600">
+                                  +{update.photos.length - 3}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">No updates yet</p>
+                )}
+              </div>
+            )}
             
             {isAdmin() && (
               <div className="text-xs text-gray-500 space-y-1">
@@ -689,7 +725,7 @@ export const ObjectivesPage = () => {
               <p className="text-gray-600 mt-1 text-sm md:text-base">
                 {userIdFromUrl && filteredUser
                   ? `Viewing objectives assigned to ${filteredUser.full_name || filteredUser.email}`
-                  : "Manage HSE objectives and track cumulative progress."
+                  : "Manage HSE objectives and track progress. Click the arrow to expand and view updates."
                 }
               </p>
             </div>
@@ -840,7 +876,7 @@ export const ObjectivesPage = () => {
                   Objectives for {ownerName}
                 </CardTitle>
                 <CardDescription>
-                  {ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"} assigned. Click on any row to view updates.
+                  {ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"} assigned. Click rows to expand and view updates.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -863,151 +899,165 @@ export const ObjectivesPage = () => {
                         const progress = objectiveProgress[objective.id] || 0;
                         const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
                         const quarterInfo = getQuarterInfo(objective.target_completion_date);
-                        const isExpanded = expandedObjectives.has(objective.id);
                         const updates = objectiveUpdates[objective.id] || [];
+                        const isExpanded = expandedObjectives.has(objective.id);
                         
                         return (
-                          <Collapsible key={objective.id} open={isExpanded} onOpenChange={() => toggleObjectiveExpansion(objective.id)}>
-                            <CollapsibleTrigger asChild>
-                              <TableRow className="cursor-pointer hover:bg-gray-50">
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    {isExpanded ? (
-                                      <ChevronDown className="h-4 w-4 text-gray-500" />
-                                    ) : (
-                                      <ChevronRight className="h-4 w-4 text-gray-500" />
-                                    )}
-                                    <div>
-                                      <div className="font-medium">{objective.title}</div>
-                                      <div className="text-sm text-gray-600 max-w-xs truncate">
-                                        {objective.description}
-                                      </div>
+                          <React.Fragment key={objective.id}>
+                            <TableRow 
+                              className="cursor-pointer hover:bg-gray-50"
+                              onClick={() => toggleObjectiveExpansion(objective.id)}
+                            >
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                                  <div>
+                                    <div className="font-medium">{objective.title}</div>
+                                    <div className="text-sm text-gray-600 max-w-xs truncate">
+                                      {objective.description}
                                     </div>
                                   </div>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="text-blue-600 border-blue-600">
-                                    {objective.weightage}%
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="secondary">
-                                    {objective.num_activities} activities
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge 
-                                    variant={progress >= 80 ? "default" : "secondary"}
-                                    className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-blue-600 border-blue-600">
+                                  {objective.weightage}%
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="secondary">
+                                  {objective.num_activities} activities
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant={progress >= 80 ? "default" : "secondary"}
+                                  className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+                                >
+                                  {progress}%
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  variant="outline" 
+                                  className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
+                                >
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  {plannedProgress}%
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-purple-600 border-purple-600">
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  {quarterInfo.quarter} {quarterInfo.year}
+                                </Badge>
+                              </TableCell>
+                              <TableCell onClick={(e) => e.stopPropagation()}>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleViewUpdates(objective.id, objective.title)}
+                                    title="View updates for this objective"
                                   >
-                                    {progress}%
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge 
-                                    variant="outline" 
-                                    className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEdit(objective)}
                                   >
-                                    <Clock className="h-3 w-3 mr-1" />
-                                    {plannedProgress}%
-                                  </Badge>
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="text-purple-600 border-purple-600">
-                                    <Calendar className="h-3 w-3 mr-1" />
-                                    {quarterInfo.quarter} {quarterInfo.year}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell onClick={(e) => e.stopPropagation()}>
-                                  <div className="flex gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleViewUpdates(objective.id, objective.title)}
-                                      title="View updates for this objective"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleEdit(objective)}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-red-600 hover:text-red-700"
-                                      onClick={() => handleDelete(objective.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent asChild>
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 hover:text-red-700"
+                                    onClick={() => handleDelete(objective.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                            
+                            {/* Collapsible Updates Row */}
+                            {isExpanded && (
                               <TableRow>
                                 <TableCell colSpan={7} className="bg-gray-50 p-4">
-                                  <div className="space-y-4">
-                                    <h4 className="font-medium text-gray-900">Updates for {objective.title}</h4>
+                                  <div className="space-y-3">
+                                    <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                                      <Eye className="h-4 w-4" />
+                                      Updates ({updates.length})
+                                    </h4>
                                     {updates.length > 0 ? (
-                                      <div className="space-y-3">
-                                        {updates.map((update, index) => {
-                                          const { cumulativeCount, rawProgress, effectiveProgress } = calculateCumulativeProgressForUpdate(updates, index, objective.num_activities);
-                                          
-                                          return (
-                                            <div key={update.id} className="bg-white p-4 rounded-lg border border-gray-200">
-                                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                                                <div className="flex items-center gap-2">
-                                                  <span className="font-medium text-gray-900">
-                                                    {update.user?.full_name || update.user?.email}
-                                                  </span>
-                                                  <Badge variant="outline">
-                                                    {new Date(update.update_date).toLocaleDateString()}
-                                                  </Badge>
-                                                </div>
-                                                {update.photos && update.photos.length > 0 && (
-                                                  <Badge variant="outline" className="flex items-center gap-1">
-                                                    <Camera className="h-3 w-3" />
-                                                    {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
-                                                  </Badge>
-                                                )}
+                                      <div className="grid gap-3 max-h-64 overflow-y-auto">
+                                        {updates.map((update) => (
+                                          <div key={update.id} className="bg-white p-3 rounded border">
+                                            <div className="flex items-start justify-between mb-2">
+                                              <div className="flex items-center gap-2">
+                                                <User className="h-3 w-3 text-gray-500" />
+                                                <span className="text-sm font-medium">
+                                                  {update.user.full_name || update.user.email}
+                                                </span>
                                               </div>
-                                              
-                                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                                <div>
-                                                  <span className="text-gray-500">This Update:</span>
-                                                  <div className="font-medium">+{update.achieved_count} activities</div>
-                                                </div>
-                                                <div>
-                                                  <span className="text-gray-500">Cumulative:</span>
-                                                  <div className="font-medium">{cumulativeCount}/{objective.num_activities} ({rawProgress}%)</div>
-                                                </div>
-                                                <div>
-                                                  <span className="text-gray-500">Efficiency:</span>
-                                                  <div className="font-medium">{update.efficiency || 100}%</div>
-                                                </div>
-                                                <div>
-                                                  <span className="text-gray-500">Effective Progress:</span>
-                                                  <div className="font-medium text-green-600">{effectiveProgress}%</div>
-                                                </div>
+                                              <span className="text-xs text-gray-500">
+                                                {new Date(update.update_date).toLocaleDateString()}
+                                              </span>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                                              <div>
+                                                <span className="text-gray-500">Activities:</span>
+                                                <span className="ml-1 font-medium">+{update.achieved_count}</span>
+                                              </div>
+                                              <div>
+                                                <span className="text-gray-500">Efficiency:</span>
+                                                <span className="ml-1 font-medium">{update.efficiency || 100}%</span>
                                               </div>
                                             </div>
-                                          );
-                                        })}
+
+                                            {update.photos && update.photos.length > 0 && (
+                                              <div className="mt-2">
+                                                <div className="flex items-center gap-1 mb-2">
+                                                  <Camera className="h-3 w-3 text-gray-500" />
+                                                  <span className="text-xs text-gray-600">
+                                                    {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
+                                                  </span>
+                                                </div>
+                                                <div className="flex gap-1">
+                                                  {update.photos.slice(0, 4).map((photo, index) => (
+                                                    <img
+                                                      key={index}
+                                                      src={photo}
+                                                      alt={`Update photo ${index + 1}`}
+                                                      className="w-12 h-12 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                                      onClick={() => window.open(photo, '_blank')}
+                                                      onError={(e) => {
+                                                        const target = e.target as HTMLImageElement;
+                                                        target.style.display = 'none';
+                                                      }}
+                                                    />
+                                                  ))}
+                                                  {update.photos.length > 4 && (
+                                                    <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-600">
+                                                      +{update.photos.length - 4}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
                                       </div>
                                     ) : (
-                                      <div className="text-center text-gray-500 py-4">
-                                        No updates found for this objective.
-                                      </div>
+                                      <p className="text-sm text-gray-500 italic">No updates yet</p>
                                     )}
                                   </div>
                                 </TableCell>
                               </TableRow>
-                            </CollapsibleContent>
-                          </Collapsible>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </TableBody>
@@ -1032,7 +1082,7 @@ export const ObjectivesPage = () => {
               My Objectives
             </CardTitle>
             <CardDescription>
-              {objectives.length} {objectives.length === 1 ? "objective" : "objectives"} configured. Click on any row to view updates.
+              {objectives.length} {objectives.length === 1 ? "objective" : "objectives"} configured. Click to expand and view updates.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1056,140 +1106,154 @@ export const ObjectivesPage = () => {
                     const progress = objectiveProgress[objective.id] || 0;
                     const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
                     const quarterInfo = getQuarterInfo(objective.target_completion_date);
-                    const isExpanded = expandedObjectives.has(objective.id);
                     const updates = objectiveUpdates[objective.id] || [];
+                    const isExpanded = expandedObjectives.has(objective.id);
                     
                     return (
-                      <Collapsible key={objective.id} open={isExpanded} onOpenChange={() => toggleObjectiveExpansion(objective.id)}>
-                        <CollapsibleTrigger asChild>
-                          <TableRow className="cursor-pointer hover:bg-gray-50">
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {isExpanded ? (
-                                  <ChevronDown className="h-4 w-4 text-gray-500" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4 text-gray-500" />
-                                )}
-                                <div>
-                                  <div className="font-medium">{objective.title}</div>
-                                  <div className="text-sm text-gray-600 max-w-xs truncate">
-                                    {objective.description}
-                                  </div>
+                      <React.Fragment key={objective.id}>
+                        <TableRow 
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => toggleObjectiveExpansion(objective.id)}
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              <div>
+                                <div className="font-medium">{objective.title}</div>
+                                <div className="text-sm text-gray-600 max-w-xs truncate">
+                                  {objective.description}
                                 </div>
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="text-sm">
-                                <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
-                                <div className="text-gray-600">{objective.owner?.email}</div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-blue-600 border-blue-600">
-                                {objective.weightage}%
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary">
-                                {objective.num_activities} activities
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant={progress >= 80 ? "default" : "secondary"}
-                                className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
-                              >
-                                {progress}%
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant="outline" 
-                                className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
-                              >
-                                <Clock className="h-3 w-3 mr-1" />
-                                {plannedProgress}%
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-purple-600 border-purple-600">
-                                <Calendar className="h-3 w-3 mr-1" />
-                                {quarterInfo.quarter} {quarterInfo.year}
-                              </Badge>
-                            </TableCell>
-                            <TableCell onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleViewUpdates(objective.id, objective.title)}
-                                title="View updates for this objective"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent asChild>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-sm">
+                              <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
+                              <div className="text-gray-600">{objective.owner?.email}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-blue-600 border-blue-600">
+                              {objective.weightage}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {objective.num_activities} activities
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant={progress >= 80 ? "default" : "secondary"}
+                              className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+                            >
+                              {progress}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge 
+                              variant="outline" 
+                              className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              {plannedProgress}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-purple-600 border-purple-600">
+                              <Calendar className="h-3 w-3 mr-1" />
+                              {quarterInfo.quarter} {quarterInfo.year}
+                            </Badge>
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewUpdates(objective.id, objective.title)}
+                              title="View updates for this objective"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        
+                        {/* Collapsible Updates Row */}
+                        {isExpanded && (
                           <TableRow>
                             <TableCell colSpan={8} className="bg-gray-50 p-4">
-                              <div className="space-y-4">
-                                <h4 className="font-medium text-gray-900">Updates for {objective.title}</h4>
+                              <div className="space-y-3">
+                                <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                                  <Eye className="h-4 w-4" />
+                                  Updates ({updates.length})
+                                </h4>
                                 {updates.length > 0 ? (
-                                  <div className="space-y-3">
-                                    {updates.map((update, index) => {
-                                      const { cumulativeCount, rawProgress, effectiveProgress } = calculateCumulativeProgressForUpdate(updates, index, objective.num_activities);
-                                      
-                                      return (
-                                        <div key={update.id} className="bg-white p-4 rounded-lg border border-gray-200">
-                                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                                            <div className="flex items-center gap-2">
-                                              <span className="font-medium text-gray-900">
-                                                {update.user?.full_name || update.user?.email}
-                                              </span>
-                                              <Badge variant="outline">
-                                                {new Date(update.update_date).toLocaleDateString()}
-                                              </Badge>
-                                            </div>
-                                            {update.photos && update.photos.length > 0 && (
-                                              <Badge variant="outline" className="flex items-center gap-1">
-                                                <Camera className="h-3 w-3" />
-                                                {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
-                                              </Badge>
-                                            )}
+                                  <div className="grid gap-3 max-h-64 overflow-y-auto">
+                                    {updates.map((update) => (
+                                      <div key={update.id} className="bg-white p-3 rounded border">
+                                        <div className="flex items-start justify-between mb-2">
+                                          <div className="flex items-center gap-2">
+                                            <User className="h-3 w-3 text-gray-500" />
+                                            <span className="text-sm font-medium">
+                                              {update.user.full_name || update.user.email}
+                                            </span>
                                           </div>
-                                          
-                                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                            <div>
-                                              <span className="text-gray-500">This Update:</span>
-                                              <div className="font-medium">+{update.achieved_count} activities</div>
-                                            </div>
-                                            <div>
-                                              <span className="text-gray-500">Cumulative:</span>
-                                              <div className="font-medium">{cumulativeCount}/{objective.num_activities} ({rawProgress}%)</div>
-                                            </div>
-                                            <div>
-                                              <span className="text-gray-500">Efficiency:</span>
-                                              <div className="font-medium">{update.efficiency || 100}%</div>
-                                            </div>
-                                            <div>
-                                              <span className="text-gray-500">Effective Progress:</span>
-                                              <div className="font-medium text-green-600">{effectiveProgress}%</div>
-                                            </div>
+                                          <span className="text-xs text-gray-500">
+                                            {new Date(update.update_date).toLocaleDateString()}
+                                          </span>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                                          <div>
+                                            <span className="text-gray-500">Activities:</span>
+                                            <span className="ml-1 font-medium">+{update.achieved_count}</span>
+                                          </div>
+                                          <div>
+                                            <span className="text-gray-500">Efficiency:</span>
+                                            <span className="ml-1 font-medium">{update.efficiency || 100}%</span>
                                           </div>
                                         </div>
-                                      );
-                                    })}
+
+                                        {update.photos && update.photos.length > 0 && (
+                                          <div className="mt-2">
+                                            <div className="flex items-center gap-1 mb-2">
+                                              <Camera className="h-3 w-3 text-gray-500" />
+                                              <span className="text-xs text-gray-600">
+                                                {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
+                                              </span>
+                                            </div>
+                                            <div className="flex gap-1">
+                                              {update.photos.slice(0, 4).map((photo, index) => (
+                                                <img
+                                                  key={index}
+                                                  src={photo}
+                                                  alt={`Update photo ${index + 1}`}
+                                                  className="w-12 h-12 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                                  onClick={() => window.open(photo, '_blank')}
+                                                  onError={(e) => {
+                                                    const target = e.target as HTMLImageElement;
+                                                    target.style.display = 'none';
+                                                  }}
+                                                />
+                                              ))}
+                                              {update.photos.length > 4 && (
+                                                <div className="w-12 h-12 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-600">
+                                                  +{update.photos.length - 4}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
                                   </div>
                                 ) : (
-                                  <div className="text-center text-gray-500 py-4">
-                                    No updates found for this objective.
-                                  </div>
+                                  <p className="text-sm text-gray-500 italic">No updates yet</p>
                                 )}
                               </div>
                             </TableCell>
                           </TableRow>
-                        </CollapsibleContent>
-                      </Collapsible>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </TableBody>
