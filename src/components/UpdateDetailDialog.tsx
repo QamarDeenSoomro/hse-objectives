@@ -1,5 +1,4 @@
-
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Camera, User } from "lucide-react";
 
@@ -30,6 +29,9 @@ export const UpdateDetailDialog = ({ isOpen, onOpenChange, objectiveTitle, updat
             <Calendar className="h-5 w-5 text-blue-600" />
             Updates for: {objectiveTitle}
           </DialogTitle>
+          <DialogDescription>
+            View all progress updates and photos for this objective.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">

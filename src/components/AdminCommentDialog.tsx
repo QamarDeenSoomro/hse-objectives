@@ -1,6 +1,5 @@
-
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -45,6 +44,9 @@ export const AdminCommentDialog = ({ entry, isOpen, onClose }: AdminCommentDialo
             <MessageSquare className="h-5 w-5 text-blue-600" />
             Admin Comment
           </DialogTitle>
+          <DialogDescription>
+            Add or edit an admin comment for this daily work entry.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
