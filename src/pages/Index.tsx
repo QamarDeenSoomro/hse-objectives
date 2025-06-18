@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { Dashboard } from "@/components/Dashboard";
@@ -9,10 +8,10 @@ import { ReportsPage } from "@/components/ReportsPage";
 import { UsersPage } from "@/components/UsersPage";
 import { ProfilePage } from "@/components/ProfilePage";
 import { LoginPage } from "@/components/LoginPage";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Toaster } from "@/components/ui/toaster";
 
-const AppContent = () => {
+const Index = () => {
   const { user, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState("dashboard");
 
@@ -59,16 +58,8 @@ const AppContent = () => {
       <main className="flex-1 overflow-auto md:ml-0 pt-16 md:pt-0">
         {renderPage()}
       </main>
-    </div>
-  );
-};
-
-const Index = () => {
-  return (
-    <AuthProvider>
-      <AppContent />
       <Toaster />
-    </AuthProvider>
+    </div>
   );
 };
 
