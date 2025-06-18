@@ -138,30 +138,60 @@ export const useActionItems = () => {
   // Close action item mutation
   const closeActionItemMutation = useMutation({
     mutationFn: async ({ actionItemId, formData }: { actionItemId: string; formData: ActionItemClosureFormData }) => {
-      // Upload media files first if any
+      // Handle media files upload with proper error handling
       let mediaUrls: string[] = [];
       if (formData.media_files && formData.media_files.length > 0) {
-        for (const file of formData.media_files) {
-          const fileExt = file.name.split('.').pop();
-          const fileName = `action-items/${actionItemId}/${Date.now()}.${fileExt}`;
+        try {
+          // First check if the storage bucket exists
+          const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
           
-          const { error: uploadError } = await supabase.storage
-            .from('action-item-media')
-            .upload(fileName, file);
-
-          if (uploadError) {
-            console.error('Media upload error:', uploadError);
-            throw uploadError;
+          if (bucketsError) {
+            console.error('Error checking storage buckets:', bucketsError);
+            throw new Error('Unable to access storage. Please contact your administrator.');
           }
 
-          const { data } = supabase.storage
-            .from('action-item-media')
-            .getPublicUrl(fileName);
+          const actionItemBucket = buckets?.find(bucket => bucket.name === 'action-item-media');
           
-          mediaUrls.push(data.publicUrl);
+          if (!actionItemBucket) {
+            throw new Error('Media storage is not configured. Please contact your administrator to set up the "action-item-media" storage bucket.');
+          }
+
+          // Proceed with file uploads
+          for (const file of formData.media_files) {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `action-items/${actionItemId}/${Date.now()}.${fileExt}`;
+            
+            const { error: uploadError } = await supabase.storage
+              .from('action-item-media')
+              .upload(fileName, file);
+
+            if (uploadError) {
+              console.error('Media upload error:', uploadError);
+              if (uploadError.message.includes('Bucket not found')) {
+                throw new Error('Media storage bucket not found. Please contact your administrator.');
+              }
+              throw uploadError;
+            }
+
+            const { data } = supabase.storage
+              .from('action-item-media')
+              .getPublicUrl(fileName);
+            
+            mediaUrls.push(data.publicUrl);
+          }
+        } catch (error) {
+          // If media upload fails, we'll still allow the closure but without media
+          console.warn('Media upload failed, proceeding without media:', error);
+          toast({
+            title: "Warning",
+            description: error instanceof Error ? error.message : "Media upload failed, but action item will be closed without attachments.",
+            variant: "destructive",
+          });
+          mediaUrls = [];
         }
       }
 
+      // Create the closure record
       const { data, error } = await supabase
         .from('action_item_closures')
         .insert([{
@@ -184,9 +214,10 @@ export const useActionItems = () => {
     },
     onError: (error) => {
       console.error('Action item closure error:', error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to close action item";
       toast({
         title: "Error",
-        description: "Failed to close action item",
+        description: errorMessage,
         variant: "destructive",
       });
     },
