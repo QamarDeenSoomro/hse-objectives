@@ -1,4 +1,3 @@
-
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -138,22 +137,24 @@ export const useDashboardData = () => {
     
     // Calculate average completion across all objectives for this user
     let totalCompletion = 0;
-    let objectiveCount = 0;
+    let objectiveCount = userObjectives.length; // Count ALL objectives, even those with 0% progress
     
     userObjectives.forEach(objective => {
       const latestUpdate = objective.updates?.reduce((latest: any, update: any) => 
         new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest
       , null);
       
+      let completion = 0; // Default to 0 for objectives without updates
       if (latestUpdate) {
-        const completion = calculateEffectiveProgress(
+        completion = calculateEffectiveProgress(
           latestUpdate.achieved_count, 
           objective.num_activities, 
           latestUpdate.efficiency || 100
         );
-        totalCompletion += Math.min(100, completion);
-        objectiveCount++;
+        completion = Math.min(100, completion);
       }
+      
+      totalCompletion += completion; // Add completion (0 if no updates) to total
     });
     
     const averageCompletion = objectiveCount > 0 ? Math.round(totalCompletion / objectiveCount) : 0;

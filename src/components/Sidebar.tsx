@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -16,7 +15,7 @@ import {
   FileText
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNavigate } from "react-router-dom"; // Add useNavigate
+import { useNavigate, useLocation } from "react-router-dom";
 
 interface SidebarProps {
   currentPage: string;
@@ -26,29 +25,34 @@ interface SidebarProps {
 export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
   const { user, logout, isAdmin } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const navigate = useNavigate(); // Initialize useNavigate
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // "reports" and "reports-dashboard" are included only for admin users now
   const menuItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
     { id: "objectives", label: "Objectives", icon: Target },
     { id: "updates", label: "Updates", icon: CheckSquare },
     { id: "daily-work", label: "Daily Work", icon: Calendar },
     ...(isAdmin() ? [{ id: "reports", label: "Reports", icon: FileText }] : []),
-    // ADD REPORTS DASHBOARD MENU ITEM FOR ADMINS ONLY
     ...(isAdmin() ? [{ id: "reports-dashboard", label: "Reports Dashboard", icon: LayoutDashboard }] : []),
     ...(isAdmin() ? [{ id: "users", label: "Users", icon: Users }] : []),
     { id: "profile", label: "Profile", icon: User },
   ];
 
   const handleMenuClick = (pageId: string) => {
-    // If the menu item is the /reports-dashboard route, use navigate directly.
     if (pageId === "reports-dashboard") {
       setIsOpen(false);
       navigate("/reports-dashboard");
+    } else if (pageId === "objectives") {
+      setIsOpen(false);
+      navigate("/objectives");
     } else {
       setCurrentPage(pageId);
       setIsOpen(false);
+      // Navigate to home for other pages
+      if (location.pathname !== "/") {
+        navigate("/");
+      }
     }
   };
 
@@ -70,8 +74,9 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = currentPage === item.id || (
-            // For reports-dashboard, highlight if location is /reports-dashboard
-            item.id === "reports-dashboard" && window.location.pathname === "/reports-dashboard"
+            item.id === "reports-dashboard" && location.pathname === "/reports-dashboard"
+          ) || (
+            item.id === "objectives" && location.pathname === "/objectives"
           );
 
           return (

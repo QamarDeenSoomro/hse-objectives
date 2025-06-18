@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,10 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Target } from "lucide-react";
+import { Plus, Edit, Trash2, Target, Eye, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSearchParams, useNavigate } from "react-router-dom";
 
 interface Objective {
   id: string;
@@ -41,11 +42,16 @@ interface UserProfile {
 
 export const ObjectivesPage = () => {
   const { isAdmin, profile } = useAuth();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [objectives, setObjectives] = useState<Objective[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [selectedObjectiveUpdates, setSelectedObjectiveUpdates] = useState<any[]>([]);
+  const [selectedObjectiveTitle, setSelectedObjectiveTitle] = useState("");
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -54,12 +60,26 @@ export const ObjectivesPage = () => {
     ownerId: "",
   });
 
+  // Get userId from URL parameters for filtering
+  const userIdFromUrl = searchParams.get('userId');
+  const [filteredUser, setFilteredUser] = useState<UserProfile | null>(null);
+
   useEffect(() => {
     fetchObjectives();
     if (isAdmin()) {
       fetchUsers();
     }
-  }, [isAdmin, profile]);
+  }, [isAdmin, profile, userIdFromUrl]);
+
+  useEffect(() => {
+    // Find the filtered user details when userIdFromUrl changes
+    if (userIdFromUrl && users.length > 0) {
+      const user = users.find(u => u.id === userIdFromUrl);
+      setFilteredUser(user || null);
+    } else {
+      setFilteredUser(null);
+    }
+  }, [userIdFromUrl, users]);
 
   const fetchObjectives = async () => {
     try {
@@ -72,13 +92,17 @@ export const ObjectivesPage = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (!isAdmin()) {
+      // Apply filtering based on user role and URL parameters
+      if (isAdmin()) {
+        // Admin can view all objectives or filter by specific user
+        if (userIdFromUrl) {
+          query = query.eq('owner_id', userIdFromUrl);
+        }
+      } else {
+        // Non-admin users can only see their own objectives
         if (profile && profile.id) {
           query = query.eq('owner_id', profile.id);
         } else {
-          // Not an admin and profile or profile.id is not available.
-          // This case should ideally be handled based on application logic.
-          // For now, log an error and don't fetch objectives or set to empty.
           console.error("Error: Non-admin user profile or profile ID is missing. Cannot fetch objectives.");
           setObjectives([]);
           setLoading(false);
@@ -118,6 +142,41 @@ export const ObjectivesPage = () => {
       setUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
+    }
+  };
+
+  const handleViewUpdates = async (objectiveId: string, objectiveTitle: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('objective_updates')
+        .select(`
+          *,
+          user:profiles!user_id(full_name, email)
+        `)
+        .eq('objective_id', objectiveId)
+        .order('update_date', { ascending: false });
+
+      if (error) throw error;
+
+      // Transform the data to match UpdateDetailDialog expectations
+      const transformedUpdates = data.map(update => ({
+        ...update,
+        user: {
+          full_name: update.user?.full_name || '',
+          email: update.user?.email || ''
+        }
+      }));
+
+      setSelectedObjectiveUpdates(transformedUpdates);
+      setSelectedObjectiveTitle(objectiveTitle);
+      setIsDetailDialogOpen(true);
+    } catch (error) {
+      console.error('Error fetching objective updates:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch objective updates",
+        variant: "destructive",
+      });
     }
   };
 
@@ -233,6 +292,10 @@ export const ObjectivesPage = () => {
     setIsDialogOpen(true);
   };
 
+  const handleBackToDashboard = () => {
+    navigate('/');
+  };
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center">
@@ -245,11 +308,36 @@ export const ObjectivesPage = () => {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Objectives Management</h1>
-          <p className="text-gray-600 mt-1">Manage HSE objectives and track progress.</p>
+          <div className="flex items-center gap-4">
+            {userIdFromUrl && isAdmin() && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBackToDashboard}
+                className="flex items-center gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Dashboard
+              </Button>
+            )}
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {userIdFromUrl && filteredUser 
+                  ? `${filteredUser.full_name || filteredUser.email}'s Objectives`
+                  : "Objectives Management"
+                }
+              </h1>
+              <p className="text-gray-600 mt-1">
+                {userIdFromUrl && filteredUser
+                  ? `Viewing objectives assigned to ${filteredUser.full_name || filteredUser.email}`
+                  : "Manage HSE objectives and track progress."
+                }
+              </p>
+            </div>
+          </div>
           {isAdmin() && objectives.length > 0 && (
             <p className="text-sm text-gray-500 mt-2">
-              Total objectives being managed: <Badge variant="secondary">{objectives.length}</Badge>
+              Total objectives {userIdFromUrl ? 'for this user' : 'being managed'}: <Badge variant="secondary">{objectives.length}</Badge>
             </p>
           )}
         </div>
@@ -358,7 +446,7 @@ export const ObjectivesPage = () => {
       </div>
 
       {isAdmin() ? (
-        <div className=""> {/* Grid classes removed */}
+        <div className="">
           {Object.entries(
             objectives.reduce((acc, objective) => {
               const ownerName = objective.owner?.full_name || objective.owner?.email || objective.owner_id || "Unknown Owner";
@@ -369,83 +457,91 @@ export const ObjectivesPage = () => {
               return acc;
             }, {} as Record<string, Objective[]>)
           ).map(([ownerName, ownerObjectives]) => (
-            <Card key={ownerName} className="border-0 shadow-lg mb-6"> {/* mb-6 reinstated */}
+            <Card key={ownerName} className="border-0 shadow-lg mb-6">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Target className="h-5 w-5 text-blue-600" />
-                Objectives for {ownerName}
-              </CardTitle>
-              <CardDescription>
-                {ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"} assigned.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Weightage</TableHead>
-                      <TableHead>Activities</TableHead>
-                      <TableHead>Created By</TableHead>
-                      <TableHead>Created Date</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {ownerObjectives.map((objective) => (
-                      <TableRow key={objective.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{objective.title}</div>
-                            <div className="text-sm text-gray-600 max-w-xs truncate">
-                              {objective.description}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-blue-600 border-blue-600">
-                            {objective.weightage}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {objective.num_activities} activities
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-600">
-                          {objective.creator?.full_name || objective.creator?.email}
-                        </TableCell>
-                        <TableCell className="text-sm text-gray-600">
-                          {new Date(objective.created_at).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(objective)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700"
-                              onClick={() => handleDelete(objective.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                  Objectives for {ownerName}
+                </CardTitle>
+                <CardDescription>
+                  {ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"} assigned.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Title</TableHead>
+                        <TableHead>Weightage</TableHead>
+                        <TableHead>Activities</TableHead>
+                        <TableHead>Created By</TableHead>
+                        <TableHead>Created Date</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                    </TableHeader>
+                    <TableBody>
+                      {ownerObjectives.map((objective) => (
+                        <TableRow key={objective.id}>
+                          <TableCell>
+                            <div>
+                              <div className="font-medium">{objective.title}</div>
+                              <div className="text-sm text-gray-600 max-w-xs truncate">
+                                {objective.description}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-blue-600 border-blue-600">
+                              {objective.weightage}%
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">
+                              {objective.num_activities} activities
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {objective.creator?.full_name || objective.creator?.email}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {new Date(objective.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewUpdates(objective.id, objective.title)}
+                                title="View updates for this objective"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEdit(objective)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => handleDelete(objective.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       ) : (
         <Card className="border-0 shadow-lg">
@@ -469,7 +565,7 @@ export const ObjectivesPage = () => {
                     <TableHead>Activities</TableHead>
                     <TableHead>Created By</TableHead>
                     <TableHead>Created Date</TableHead>
-                    {/* Actions column is not rendered for non-admins here */}
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -505,7 +601,16 @@ export const ObjectivesPage = () => {
                       <TableCell className="text-sm text-gray-600">
                         {new Date(objective.created_at).toLocaleDateString()}
                       </TableCell>
-                      {/* isAdmin() is false in this branch, so this TableCell for actions won't render */}
+                      <TableCell>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewUpdates(objective.id, objective.title)}
+                          title="View updates for this objective"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -514,6 +619,14 @@ export const ObjectivesPage = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Update Detail Dialog */}
+      <UpdateDetailDialog
+        isOpen={isDetailDialogOpen}
+        onOpenChange={setIsDetailDialogOpen}
+        objectiveTitle={selectedObjectiveTitle}
+        updates={selectedObjectiveUpdates}
+      />
     </div>
   );
 };

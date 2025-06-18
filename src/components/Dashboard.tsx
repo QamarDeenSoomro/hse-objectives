@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Target, Users, CheckSquare, TrendingUp, User } from "lucide-react";
 import { useDashboardData } from "@/hooks/useDashboardData";
+import { useNavigate } from "react-router-dom";
 
 interface DashboardProps {
   onNavigateToObjectives?: () => void;
@@ -10,6 +11,11 @@ interface DashboardProps {
 
 export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
   const { stats, teamData, groupedObjectiveStatuses, isLoading, isAdmin } = useDashboardData();
+  const navigate = useNavigate();
+
+  const handleTeamMemberClick = (memberId: string) => {
+    navigate(`/objectives?userId=${memberId}`);
+  };
 
   if (isLoading) {
     return (
@@ -110,7 +116,7 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
             </CardTitle>
             <CardDescription className="text-sm">
               {isAdmin 
-                ? "Individual objectives average completion rates" 
+                ? "Individual objectives average completion rates (click to view details)" 
                 : "Your objectives average completion rates"
               }
             </CardDescription>
@@ -121,7 +127,13 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
                 teamData.map((member, index) => (
                   <div key={index} className="space-y-2">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <span className="font-medium text-gray-900 text-sm md:text-base truncate">
+                      <span 
+                        className={`font-medium text-gray-900 text-sm md:text-base truncate ${
+                          isAdmin ? 'cursor-pointer hover:text-blue-600 hover:underline' : ''
+                        }`}
+                        onClick={isAdmin ? () => handleTeamMemberClick(member.id) : undefined}
+                        title={isAdmin ? `Click to view ${member.name}'s objectives` : undefined}
+                      >
                         {member.name}
                       </span>
                       <div className="flex items-center gap-2 flex-shrink-0">
