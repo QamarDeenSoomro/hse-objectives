@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.49.9';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,12 +6,25 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
+    // Create client for user authentication (using anon key)
+    const supabaseAuth = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
+    // Create admin client for database operations (using service role key)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -30,15 +42,15 @@ serve(async (req) => {
       throw new Error('No authorization header');
     }
 
-    // Verify the user is authenticated and get their info
+    // Verify the user is authenticated and get their info using the auth client
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser(token);
     
     if (authError || !user) {
       throw new Error('Invalid token');
     }
 
-    // Check if the user is a superadmin
+    // Check if the user is a superadmin using the admin client
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('role')
