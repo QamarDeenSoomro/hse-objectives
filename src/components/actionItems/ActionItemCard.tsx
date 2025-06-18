@@ -20,9 +20,13 @@ export const ActionItemCard = ({
   onVerify, 
   showActions 
 }: ActionItemCardProps) => {
-  const isOverdue = new Date(actionItem.target_date) < new Date() && actionItem.status === 'open';
-  const canClose = actionItem.status === 'open' && onClose;
-  const canVerify = actionItem.status === 'pending_verification' && onVerify;
+  // Provide fallback values for priority and status to prevent undefined errors
+  const priority = actionItem.priority || 'medium';
+  const status = actionItem.status || 'open';
+  
+  const isOverdue = new Date(actionItem.target_date) < new Date() && status === 'open';
+  const canClose = status === 'open' && onClose;
+  const canVerify = status === 'pending_verification' && onVerify;
 
   return (
     <Card className={`border hover:shadow-md transition-shadow ${isOverdue ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}>
@@ -88,11 +92,11 @@ export const ActionItemCard = ({
           
           {/* Badges */}
           <div className="flex flex-wrap gap-2">
-            <Badge className={PRIORITY_COLORS[actionItem.priority]}>
-              {actionItem.priority.toUpperCase()}
+            <Badge className={PRIORITY_COLORS[priority]}>
+              {priority.toUpperCase()}
             </Badge>
-            <Badge className={STATUS_COLORS[actionItem.status]}>
-              {actionItem.status.replace('_', ' ').toUpperCase()}
+            <Badge className={STATUS_COLORS[status]}>
+              {status.replace('_', ' ').toUpperCase()}
             </Badge>
             {isOverdue && (
               <Badge className="bg-red-100 text-red-800">
