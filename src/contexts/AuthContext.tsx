@@ -111,7 +111,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (error) {
         // Handle the specific 'session_not_found' case as informational
-        if (error.message?.includes('session_not_found') || error.message?.includes('Session from session_id claim in JWT does not exist')) {
+        if (error.message?.includes('session_not_found') || 
+            error.message?.includes('Session from session_id claim in JWT does not exist') ||
+            (error as any).status === 403 ||
+            (error as any).code === 'session_not_found') {
           console.info('Session already cleared on server:', error.message);
         } else {
           console.error('Logout error:', error);
@@ -125,7 +128,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       // Handle any unexpected errors - check for session-related errors first
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('session_not_found') || errorMessage.includes('Session from session_id claim in JWT does not exist')) {
+      if (errorMessage.includes('session_not_found') || 
+          errorMessage.includes('Session from session_id claim in JWT does not exist') ||
+          (error as any).status === 403 ||
+          (error as any).code === 'session_not_found') {
         console.info('Session already cleared on server:', errorMessage);
       } else {
         console.error('Logout error:', error);
