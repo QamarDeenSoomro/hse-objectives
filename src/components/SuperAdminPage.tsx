@@ -307,7 +307,7 @@ export const SuperAdminPage = () => {
                       id="setting-value"
                       value={newSetting.value}
                       onChange={(e) => setNewSetting(prev => ({ ...prev, value: e.target.value }))}
-                      placeholder="e.g., true or \"2025-12-31\""
+                      placeholder='e.g., true or "2025-12-31"'
                     />
                   </div>
                   <div>
