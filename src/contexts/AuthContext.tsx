@@ -106,11 +106,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      
+      // If the error is "session_not_found", treat it as a successful logout
+      // since the session is already invalid on the server
+      if (error && error.message && error.message.includes('session_not_found')) {
+        // Session is already invalid, which is effectively a successful logout
+        return;
+      }
+      
+      if (error) throw error;
     } catch (error) {
-      // Handle cases where the session is already invalid on the server
-      // The onAuthStateChange listener will still update the local state correctly
-      console.warn('Logout error (session may already be invalid):', error);
+      // Handle other logout errors that aren't session_not_found
+      console.warn('Logout error:', error);
     }
   };
 
