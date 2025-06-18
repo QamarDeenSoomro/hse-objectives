@@ -30,7 +30,7 @@ export const ActionItemFormDialog = ({
     target_date: "",
     priority: "medium",
     assigned_to: "",
-    verifier_id: "",
+    verifier_id: "none", // Changed from empty string to "none"
   });
 
   // Fetch users for assignment
@@ -55,7 +55,7 @@ export const ActionItemFormDialog = ({
         target_date: editingActionItem.target_date,
         priority: editingActionItem.priority,
         assigned_to: editingActionItem.assigned_to,
-        verifier_id: editingActionItem.verifier_id || "",
+        verifier_id: editingActionItem.verifier_id || "none", // Changed from empty string to "none"
       });
     } else {
       setFormData({
@@ -64,7 +64,7 @@ export const ActionItemFormDialog = ({
         target_date: "",
         priority: "medium",
         assigned_to: "",
-        verifier_id: "",
+        verifier_id: "none", // Changed from empty string to "none"
       });
     }
   }, [editingActionItem]);
@@ -72,10 +72,16 @@ export const ActionItemFormDialog = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Convert "none" back to empty string for the API
+    const submitData = {
+      ...formData,
+      verifier_id: formData.verifier_id === "none" ? "" : formData.verifier_id
+    };
+    
     if (editingActionItem) {
-      updateActionItem({ id: editingActionItem.id, formData });
+      updateActionItem({ id: editingActionItem.id, formData: submitData });
     } else {
-      createActionItem(formData);
+      createActionItem(submitData);
     }
     
     onOpenChange(false);
@@ -184,7 +190,7 @@ export const ActionItemFormDialog = ({
                 <SelectValue placeholder="Select person responsible for verification" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No verifier required</SelectItem>
+                <SelectItem value="none">No verifier required</SelectItem>
                 {users.map((user) => (
                   <SelectItem key={user.id} value={user.id}>
                     {user.full_name || user.email}
