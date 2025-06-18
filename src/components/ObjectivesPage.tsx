@@ -9,10 +9,11 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar, Clock } from "lucide-react";
+import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar, Clock, ChevronDown, ChevronRight, Camera } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
@@ -40,6 +41,21 @@ interface UserProfile {
   id: string;
   email: string;
   full_name: string;
+}
+
+interface ObjectiveUpdate {
+  id: string;
+  objective_id: string;
+  user_id: string;
+  achieved_count: number;
+  update_date: string;
+  efficiency: number;
+  photos: string[] | null;
+  created_at: string;
+  user?: {
+    full_name: string;
+    email: string;
+  };
 }
 
 // Helper function to get quarter info from date
@@ -178,6 +194,8 @@ export const ObjectivesPage = () => {
   const [selectedObjectiveUpdates, setSelectedObjectiveUpdates] = useState<any[]>([]);
   const [selectedObjectiveTitle, setSelectedObjectiveTitle] = useState("");
   const [objectiveProgress, setObjectiveProgress] = useState<Record<string, number>>({});
+  const [expandedObjectives, setExpandedObjectives] = useState<Set<string>>(new Set());
+  const [objectiveUpdates, setObjectiveUpdates] = useState<Record<string, ObjectiveUpdate[]>>({});
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -277,6 +295,85 @@ export const ObjectivesPage = () => {
     }
     
     setObjectiveProgress(progressMap);
+  };
+
+  const fetchObjectiveUpdates = async (objectiveId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('objective_updates')
+        .select(`
+          *,
+          user:profiles!user_id(full_name, email)
+        `)
+        .eq('objective_id', objectiveId)
+        .order('update_date', { ascending: false });
+
+      if (error) throw error;
+
+      // Transform the data to match our interface
+      const transformedUpdates = data.map(update => ({
+        ...update,
+        user: {
+          full_name: update.user?.full_name || '',
+          email: update.user?.email || ''
+        }
+      })) as ObjectiveUpdate[];
+
+      setObjectiveUpdates(prev => ({
+        ...prev,
+        [objectiveId]: transformedUpdates
+      }));
+    } catch (error) {
+      console.error('Error fetching objective updates:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch objective updates",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleObjectiveExpansion = async (objectiveId: string) => {
+    const newExpanded = new Set(expandedObjectives);
+    
+    if (newExpanded.has(objectiveId)) {
+      newExpanded.delete(objectiveId);
+    } else {
+      newExpanded.add(objectiveId);
+      // Fetch updates if not already loaded
+      if (!objectiveUpdates[objectiveId]) {
+        await fetchObjectiveUpdates(objectiveId);
+      }
+    }
+    
+    setExpandedObjectives(newExpanded);
+  };
+
+  const calculateCumulativeProgressForUpdate = (updates: ObjectiveUpdate[], currentUpdateIndex: number, numActivities: number) => {
+    // Sort updates by date to ensure proper cumulative calculation
+    const sortedUpdates = [...updates].sort((a, b) => new Date(a.update_date).getTime() - new Date(b.update_date).getTime());
+    
+    // Find the current update in the sorted array
+    const currentUpdate = updates[currentUpdateIndex];
+    const sortedIndex = sortedUpdates.findIndex(u => u.id === currentUpdate.id);
+    
+    // Sum all achieved counts up to and including the current update
+    const cumulativeCount = sortedUpdates
+      .slice(0, sortedIndex + 1)
+      .reduce((total, update) => total + (update.achieved_count || 0), 0);
+    
+    // Calculate cumulative percentage
+    const rawProgress = (cumulativeCount / numActivities) * 100;
+    
+    // Apply efficiency from the current update
+    const efficiency = currentUpdate.efficiency || 100;
+    const effectiveProgress = (rawProgress * efficiency) / 100;
+    
+    return {
+      cumulativeCount,
+      rawProgress: Math.round(rawProgress),
+      effectiveProgress: Math.round(Math.min(100, effectiveProgress))
+    };
   };
 
   const fetchUsers = async () => {
@@ -737,7 +834,7 @@ export const ObjectivesPage = () => {
                   Objectives for {ownerName}
                 </CardTitle>
                 <CardDescription>
-                  {ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"} assigned.
+                  {ownerObjectives.length} {ownerObjectives.length === 1 ? "objective" : "objectives"} assigned. Click on any row to view updates.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -760,14 +857,225 @@ export const ObjectivesPage = () => {
                         const progress = objectiveProgress[objective.id] || 0;
                         const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
                         const quarterInfo = getQuarterInfo(objective.target_completion_date);
+                        const isExpanded = expandedObjectives.has(objective.id);
+                        const updates = objectiveUpdates[objective.id] || [];
+                        
                         return (
-                          <TableRow key={objective.id}>
+                          <Collapsible key={objective.id} open={isExpanded} onOpenChange={() => toggleObjectiveExpansion(objective.id)}>
+                            <CollapsibleTrigger asChild>
+                              <TableRow className="cursor-pointer hover:bg-gray-50">
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4 text-gray-500" />
+                                    )}
+                                    <div>
+                                      <div className="font-medium">{objective.title}</div>
+                                      <div className="text-sm text-gray-600 max-w-xs truncate">
+                                        {objective.description}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-blue-600 border-blue-600">
+                                    {objective.weightage}%
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="secondary">
+                                    {objective.num_activities} activities
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge 
+                                    variant={progress >= 80 ? "default" : "secondary"}
+                                    className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+                                  >
+                                    {progress}%
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge 
+                                    variant="outline" 
+                                    className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
+                                  >
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    {plannedProgress}%
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-purple-600 border-purple-600">
+                                    <Calendar className="h-3 w-3 mr-1" />
+                                    {quarterInfo.quarter} {quarterInfo.year}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleViewUpdates(objective.id, objective.title)}
+                                      title="View updates for this objective"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleEdit(objective)}
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="text-red-600 hover:text-red-700"
+                                      onClick={() => handleDelete(objective.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent asChild>
+                              <TableRow>
+                                <TableCell colSpan={7} className="bg-gray-50 p-4">
+                                  <div className="space-y-4">
+                                    <h4 className="font-medium text-gray-900">Updates for {objective.title}</h4>
+                                    {updates.length > 0 ? (
+                                      <div className="space-y-3">
+                                        {updates.map((update, index) => {
+                                          const { cumulativeCount, rawProgress, effectiveProgress } = calculateCumulativeProgressForUpdate(updates, index, objective.num_activities);
+                                          
+                                          return (
+                                            <div key={update.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                                                <div className="flex items-center gap-2">
+                                                  <span className="font-medium text-gray-900">
+                                                    {update.user?.full_name || update.user?.email}
+                                                  </span>
+                                                  <Badge variant="outline">
+                                                    {new Date(update.update_date).toLocaleDateString()}
+                                                  </Badge>
+                                                </div>
+                                                {update.photos && update.photos.length > 0 && (
+                                                  <Badge variant="outline" className="flex items-center gap-1">
+                                                    <Camera className="h-3 w-3" />
+                                                    {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
+                                                  </Badge>
+                                                )}
+                                              </div>
+                                              
+                                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                                <div>
+                                                  <span className="text-gray-500">This Update:</span>
+                                                  <div className="font-medium">+{update.achieved_count} activities</div>
+                                                </div>
+                                                <div>
+                                                  <span className="text-gray-500">Cumulative:</span>
+                                                  <div className="font-medium">{cumulativeCount}/{objective.num_activities} ({rawProgress}%)</div>
+                                                </div>
+                                                <div>
+                                                  <span className="text-gray-500">Efficiency:</span>
+                                                  <div className="font-medium">{update.efficiency || 100}%</div>
+                                                </div>
+                                                <div>
+                                                  <span className="text-gray-500">Effective Progress:</span>
+                                                  <div className="font-medium text-green-600">{effectiveProgress}%</div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <div className="text-center text-gray-500 py-4">
+                                        No updates found for this objective.
+                                      </div>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="lg:hidden space-y-4">
+                  {ownerObjectives.map((objective) => (
+                    <ObjectiveCard key={objective.id} objective={objective} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className="border-0 shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-blue-600" />
+              My Objectives
+            </CardTitle>
+            <CardDescription>
+              {objectives.length} {objectives.length === 1 ? "objective" : "objectives"} configured. Click on any row to view updates.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Desktop Table View */}
+            <div className="hidden lg:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Owner</TableHead>
+                    <TableHead>Weightage</TableHead>
+                    <TableHead>Activities</TableHead>
+                    <TableHead>Progress</TableHead>
+                    <TableHead>Planned</TableHead>
+                    <TableHead>Target Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {objectives.map((objective) => {
+                    const progress = objectiveProgress[objective.id] || 0;
+                    const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
+                    const quarterInfo = getQuarterInfo(objective.target_completion_date);
+                    const isExpanded = expandedObjectives.has(objective.id);
+                    const updates = objectiveUpdates[objective.id] || [];
+                    
+                    return (
+                      <Collapsible key={objective.id} open={isExpanded} onOpenChange={() => toggleObjectiveExpansion(objective.id)}>
+                        <CollapsibleTrigger asChild>
+                          <TableRow className="cursor-pointer hover:bg-gray-50">
                             <TableCell>
-                              <div>
-                                <div className="font-medium">{objective.title}</div>
-                                <div className="text-sm text-gray-600 max-w-xs truncate">
-                                  {objective.description}
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 text-gray-500" />
+                                )}
+                                <div>
+                                  <div className="font-medium">{objective.title}</div>
+                                  <div className="text-sm text-gray-600 max-w-xs truncate">
+                                    {objective.description}
+                                  </div>
                                 </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm">
+                                <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
+                                <div className="text-gray-600">{objective.owner?.email}</div>
                               </div>
                             </TableCell>
                             <TableCell>
@@ -803,142 +1111,79 @@ export const ObjectivesPage = () => {
                                 {quarterInfo.quarter} {quarterInfo.year}
                               </Badge>
                             </TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleViewUpdates(objective.id, objective.title)}
-                                  title="View updates for this objective"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleEdit(objective)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 hover:text-red-700"
-                                  onClick={() => handleDelete(objective.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleViewUpdates(objective.id, objective.title)}
+                                title="View updates for this objective"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent asChild>
+                          <TableRow>
+                            <TableCell colSpan={8} className="bg-gray-50 p-4">
+                              <div className="space-y-4">
+                                <h4 className="font-medium text-gray-900">Updates for {objective.title}</h4>
+                                {updates.length > 0 ? (
+                                  <div className="space-y-3">
+                                    {updates.map((update, index) => {
+                                      const { cumulativeCount, rawProgress, effectiveProgress } = calculateCumulativeProgressForUpdate(updates, index, objective.num_activities);
+                                      
+                                      return (
+                                        <div key={update.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium text-gray-900">
+                                                {update.user?.full_name || update.user?.email}
+                                              </span>
+                                              <Badge variant="outline">
+                                                {new Date(update.update_date).toLocaleDateString()}
+                                              </Badge>
+                                            </div>
+                                            {update.photos && update.photos.length > 0 && (
+                                              <Badge variant="outline" className="flex items-center gap-1">
+                                                <Camera className="h-3 w-3" />
+                                                {update.photos.length} photo{update.photos.length !== 1 ? 's' : ''}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                          
+                                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                            <div>
+                                              <span className="text-gray-500">This Update:</span>
+                                              <div className="font-medium">+{update.achieved_count} activities</div>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-500">Cumulative:</span>
+                                              <div className="font-medium">{cumulativeCount}/{objective.num_activities} ({rawProgress}%)</div>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-500">Efficiency:</span>
+                                              <div className="font-medium">{update.efficiency || 100}%</div>
+                                            </div>
+                                            <div>
+                                              <span className="text-gray-500">Effective Progress:</span>
+                                              <div className="font-medium text-green-600">{effectiveProgress}%</div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div className="text-center text-gray-500 py-4">
+                                    No updates found for this objective.
+                                  </div>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-
-                {/* Mobile Card View */}
-                <div className="lg:hidden space-y-4">
-                  {ownerObjectives.map((objective) => (
-                    <ObjectiveCard key={objective.id} objective={objective} />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card className="border-0 shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-blue-600" />
-              My Objectives
-            </CardTitle>
-            <CardDescription>
-              {objectives.length} {objectives.length === 1 ? "objective" : "objectives"} configured
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {/* Desktop Table View */}
-            <div className="hidden lg:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Weightage</TableHead>
-                    <TableHead>Activities</TableHead>
-                    <TableHead>Progress</TableHead>
-                    <TableHead>Planned</TableHead>
-                    <TableHead>Target Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {objectives.map((objective) => {
-                    const progress = objectiveProgress[objective.id] || 0;
-                    const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
-                    const quarterInfo = getQuarterInfo(objective.target_completion_date);
-                    return (
-                      <TableRow key={objective.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{objective.title}</div>
-                            <div className="text-sm text-gray-600 max-w-xs truncate">
-                              {objective.description}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
-                            <div className="text-gray-600">{objective.owner?.email}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-blue-600 border-blue-600">
-                            {objective.weightage}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {objective.num_activities} activities
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={progress >= 80 ? "default" : "secondary"}
-                            className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
-                          >
-                            {progress}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant="outline" 
-                            className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
-                          >
-                            <Clock className="h-3 w-3 mr-1" />
-                            {plannedProgress}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-purple-600 border-purple-600">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            {quarterInfo.quarter} {quarterInfo.year}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewUpdates(objective.id, objective.title)}
-                            title="View updates for this objective"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
+                        </CollapsibleContent>
+                      </Collapsible>
                     );
                   })}
                 </TableBody>
