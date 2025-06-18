@@ -15,7 +15,7 @@ const CustomProgressBar = ({ planned, actual, className = "" }: { planned: numbe
     <div className={`relative w-full h-2 bg-gray-200 rounded-full overflow-hidden ${className}`}>
       {/* Planned Progress (Green) */}
       <div 
-        className="absolute top-0 left-0 h-full bg-green-500 transition-all duration-300"
+        className="absolute top-0 left-0 h-full bg-emerald-500 transition-all duration-300"
         style={{ width: `${Math.min(planned, 100)}%` }}
       />
       {/* Actual Progress (Yellow/Amber) */}
@@ -109,16 +109,14 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
         <Card className="border-0 shadow-lg bg-gradient-to-br from-orange-500 to-orange-600 text-white">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              {isAdmin ? "Team Members" : "My Progress"}
+              {isAdmin ? "Avg Planned" : "My Planned"}
             </CardTitle>
             {isAdmin ? <Users className="h-4 w-4" /> : <User className="h-4 w-4" />}
           </CardHeader>
           <CardContent>
-            <div className="text-xl md:text-2xl font-bold">
-              {isAdmin ? teamData.length : `${stats.averageCompletion}%`}
-            </div>
+            <div className="text-xl md:text-2xl font-bold">{stats.averagePlannedProgress}%</div>
             <p className="text-xs text-orange-100">
-              {isAdmin ? "Active users" : "Overall progress"}
+              {isAdmin ? "Team planned progress" : "My planned progress"}
             </p>
           </CardContent>
         </Card>
@@ -163,17 +161,17 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
                         </Badge>
                       </div>
                     </div>
-                    <CustomProgressBar planned={100} actual={member.completion} />
+                    <CustomProgressBar planned={member.plannedProgress} actual={member.completion} />
                     <div className="flex items-center justify-between text-xs text-gray-500">
                       <span>Last update: {new Date(member.lastUpdate).toLocaleDateString()}</span>
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-1">
-                          <div className="w-3 h-2 bg-green-500 rounded-sm"></div>
-                          <span>Planned</span>
+                          <div className="w-3 h-2 bg-emerald-500 rounded-sm"></div>
+                          <span>Planned ({member.plannedProgress}%)</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <div className="w-3 h-2 bg-amber-400 rounded-sm"></div>
-                          <span>Achieved</span>
+                          <span>Achieved ({member.completion}%)</span>
                         </div>
                       </div>
                     </div>
@@ -227,7 +225,24 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
                             </div>
                           </div>
                         </div>
-                        <CustomProgressBar planned={100} actual={objective.completion} />
+                        <CustomProgressBar planned={objective.plannedProgress} actual={objective.completion} />
+                        <div className="flex items-center justify-between text-xs text-gray-500">
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-2 bg-emerald-500 rounded-sm"></div>
+                              <span>Planned ({objective.plannedProgress}%)</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <div className="w-3 h-2 bg-amber-400 rounded-sm"></div>
+                              <span>Achieved ({objective.completion}%)</span>
+                            </div>
+                          </div>
+                          {objective.plannedProgress !== objective.completion && (
+                            <span className={`font-medium ${objective.completion > objective.plannedProgress ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {objective.completion > objective.plannedProgress ? `+${objective.completion - objective.plannedProgress}%` : `${objective.completion - objective.plannedProgress}%`}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -7,6 +7,7 @@ interface DashboardStats {
   averageCompletion: number;
   totalActivities: number;
   plannedActivities: number;
+  averagePlannedProgress: number;
 }
 
 interface TeamMember {
@@ -15,6 +16,7 @@ interface TeamMember {
   completion: number;
   activities: number;
   lastUpdate: string;
+  plannedProgress: number;
 }
 
 interface ObjectiveStatus {
@@ -23,7 +25,27 @@ interface ObjectiveStatus {
   completion: number;
   weightage: number;
   ownerName?: string;
+  plannedProgress: number;
 }
+
+// Helper function to calculate planned progress based on time elapsed
+const calculatePlannedProgress = (targetDate: string) => {
+  const startDate = new Date('2025-01-01');
+  const endDate = new Date(targetDate);
+  const currentDate = new Date();
+  
+  // If current date is before start date, planned progress is 0
+  if (currentDate < startDate) return 0;
+  
+  // If current date is after end date, planned progress is 100
+  if (currentDate > endDate) return 100;
+  
+  const totalDuration = endDate.getTime() - startDate.getTime();
+  const elapsedDuration = currentDate.getTime() - startDate.getTime();
+  
+  const plannedProgress = (elapsedDuration / totalDuration) * 100;
+  return Math.round(Math.max(0, Math.min(100, plannedProgress)));
+};
 
 export const useDashboardData = () => {
   const { profile, isAdmin } = useAuth();
@@ -103,6 +125,14 @@ export const useDashboardData = () => {
     return (rawProgress * efficiency) / 100;
   };
 
+  // Calculate average planned progress across all objectives
+  const averagePlannedProgress = objectives.length > 0 
+    ? Math.round(objectives.reduce((acc, obj) => {
+        const plannedProgress = calculatePlannedProgress(obj.target_completion_date);
+        return acc + plannedProgress;
+      }, 0) / objectives.length)
+    : 0;
+
   // Calculate dashboard statistics
   const stats: DashboardStats = {
     totalObjectives: objectives.length,
@@ -129,6 +159,7 @@ export const useDashboardData = () => {
       return acc + effectiveCount;
     }, 0),
     plannedActivities: objectives.reduce((acc, obj) => acc + obj.num_activities, 0),
+    averagePlannedProgress,
   };
 
   // Calculate team performance based on objectives average instead of activities
@@ -137,6 +168,7 @@ export const useDashboardData = () => {
     
     // Calculate average completion across all objectives for this user
     let totalCompletion = 0;
+    let totalPlannedProgress = 0;
     let objectiveCount = userObjectives.length; // Count ALL objectives, even those with 0% progress
     
     userObjectives.forEach(objective => {
@@ -154,10 +186,14 @@ export const useDashboardData = () => {
         completion = Math.min(100, completion);
       }
       
+      const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
+      
       totalCompletion += completion; // Add completion (0 if no updates) to total
+      totalPlannedProgress += plannedProgress;
     });
     
     const averageCompletion = objectiveCount > 0 ? Math.round(totalCompletion / objectiveCount) : 0;
+    const averagePlannedProgress = objectiveCount > 0 ? Math.round(totalPlannedProgress / objectiveCount) : 0;
     
     // Calculate total effective activities for display purposes
     const userUpdates = allUpdates.filter(update => update.user_id === user.id);
@@ -176,6 +212,7 @@ export const useDashboardData = () => {
       completion: averageCompletion,
       activities: Math.round(totalEffectiveActivities),
       lastUpdate: lastUpdate?.update_date || new Date().toISOString().split('T')[0],
+      plannedProgress: averagePlannedProgress,
     };
   });
 
@@ -195,6 +232,7 @@ export const useDashboardData = () => {
       completion = Math.min(100, Math.round(completion));
     }
 
+    const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
     const ownerName = isAdmin() ? objective.owner?.full_name || 'Unassigned' : 'My Objectives';
 
     const objectiveData: ObjectiveStatus = {
@@ -203,6 +241,7 @@ export const useDashboardData = () => {
       completion,
       weightage: Number(objective.weightage),
       ownerName: isAdmin() ? objective.owner?.full_name || 'Unassigned' : undefined,
+      plannedProgress,
     };
 
     if (!acc[ownerName]) {
