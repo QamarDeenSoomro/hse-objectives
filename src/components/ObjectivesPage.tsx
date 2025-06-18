@@ -52,6 +52,7 @@ export const ObjectivesPage = () => {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedObjectiveUpdates, setSelectedObjectiveUpdates] = useState<any[]>([]);
   const [selectedObjectiveTitle, setSelectedObjectiveTitle] = useState("");
+  const [objectiveProgress, setObjectiveProgress] = useState<Record<string, number>>({});
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -119,6 +120,11 @@ export const ObjectivesPage = () => {
 
       if (error) throw error;
       setObjectives(data || []);
+      
+      // Fetch progress for each objective
+      if (data) {
+        await fetchObjectiveProgress(data);
+      }
     } catch (error) {
       console.error('Error fetching objectives:', error);
       toast({
@@ -129,6 +135,36 @@ export const ObjectivesPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchObjectiveProgress = async (objectives: Objective[]) => {
+    const progressMap: Record<string, number> = {};
+    
+    for (const objective of objectives) {
+      try {
+        const { data: updates } = await supabase
+          .from('objective_updates')
+          .select('achieved_count, efficiency')
+          .eq('objective_id', objective.id)
+          .order('update_date', { ascending: false })
+          .limit(1);
+
+        if (updates && updates.length > 0) {
+          const latestUpdate = updates[0];
+          const rawProgress = (latestUpdate.achieved_count / objective.num_activities) * 100;
+          const efficiency = latestUpdate.efficiency || 100;
+          const effectiveProgress = (rawProgress * efficiency) / 100;
+          progressMap[objective.id] = Math.round(Math.min(100, effectiveProgress));
+        } else {
+          progressMap[objective.id] = 0;
+        }
+      } catch (error) {
+        console.error(`Error fetching progress for objective ${objective.id}:`, error);
+        progressMap[objective.id] = 0;
+      }
+    }
+    
+    setObjectiveProgress(progressMap);
   };
 
   const fetchUsers = async () => {
@@ -296,6 +332,84 @@ export const ObjectivesPage = () => {
     navigate('/');
   };
 
+  const ObjectiveCard = ({ objective }: { objective: Objective }) => {
+    const progress = objectiveProgress[objective.id] || 0;
+    
+    return (
+      <Card className="border border-gray-200 hover:shadow-md transition-shadow">
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-gray-900 truncate">{objective.title}</h3>
+                <p className="text-sm text-gray-600 mt-1 line-clamp-2">{objective.description}</p>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleViewUpdates(objective.id, objective.title)}
+                  title="View updates for this objective"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+                {isAdmin() && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleEdit(objective)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700"
+                      onClick={() => handleDelete(objective.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex flex-wrap gap-2 text-sm">
+              <Badge variant="outline" className="text-blue-600 border-blue-600">
+                {objective.weightage}% Weight
+              </Badge>
+              <Badge variant="secondary">
+                {objective.num_activities} activities
+              </Badge>
+              <Badge 
+                variant={progress >= 80 ? "default" : progress >= 50 ? "secondary" : "outline"}
+                className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+              >
+                {progress}% Achieved
+              </Badge>
+            </div>
+            
+            {isAdmin() && (
+              <div className="text-xs text-gray-500 space-y-1">
+                <div>Owner: {objective.owner?.full_name || objective.owner?.email}</div>
+                <div>Created by: {objective.creator?.full_name || objective.creator?.email}</div>
+                <div>Created: {new Date(objective.created_at).toLocaleDateString()}</div>
+              </div>
+            )}
+            
+            {!isAdmin() && (
+              <div className="text-xs text-gray-500 space-y-1">
+                <div>Created by: {objective.creator?.full_name || objective.creator?.email}</div>
+                <div>Created: {new Date(objective.created_at).toLocaleDateString()}</div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center">
@@ -303,74 +417,6 @@ export const ObjectivesPage = () => {
       </div>
     );
   }
-
-  const ObjectiveCard = ({ objective }: { objective: Objective }) => (
-    <Card className="border border-gray-200 hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h3 className="font-medium text-gray-900 truncate">{objective.title}</h3>
-              <p className="text-sm text-gray-600 mt-1 line-clamp-2">{objective.description}</p>
-            </div>
-            <div className="flex gap-2 flex-shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleViewUpdates(objective.id, objective.title)}
-                title="View updates for this objective"
-              >
-                <Eye className="h-4 w-4" />
-              </Button>
-              {isAdmin() && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEdit(objective)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700"
-                    onClick={() => handleDelete(objective.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap gap-2 text-sm">
-            <Badge variant="outline" className="text-blue-600 border-blue-600">
-              {objective.weightage}% Weight
-            </Badge>
-            <Badge variant="secondary">
-              {objective.num_activities} activities
-            </Badge>
-          </div>
-          
-          {isAdmin() && (
-            <div className="text-xs text-gray-500 space-y-1">
-              <div>Owner: {objective.owner?.full_name || objective.owner?.email}</div>
-              <div>Created by: {objective.creator?.full_name || objective.creator?.email}</div>
-              <div>Created: {new Date(objective.created_at).toLocaleDateString()}</div>
-            </div>
-          )}
-          
-          {!isAdmin() && (
-            <div className="text-xs text-gray-500 space-y-1">
-              <div>Created by: {objective.creator?.full_name || objective.creator?.email}</div>
-              <div>Created: {new Date(objective.created_at).toLocaleDateString()}</div>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -544,67 +590,79 @@ export const ObjectivesPage = () => {
                         <TableHead>Title</TableHead>
                         <TableHead>Weightage</TableHead>
                         <TableHead>Activities</TableHead>
+                        <TableHead>Progress</TableHead>
                         <TableHead>Created By</TableHead>
                         <TableHead>Created Date</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {ownerObjectives.map((objective) => (
-                        <TableRow key={objective.id}>
-                          <TableCell>
-                            <div>
-                              <div className="font-medium">{objective.title}</div>
-                              <div className="text-sm text-gray-600 max-w-xs truncate">
-                                {objective.description}
+                      {ownerObjectives.map((objective) => {
+                        const progress = objectiveProgress[objective.id] || 0;
+                        return (
+                          <TableRow key={objective.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{objective.title}</div>
+                                <div className="text-sm text-gray-600 max-w-xs truncate">
+                                  {objective.description}
+                                </div>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-blue-600 border-blue-600">
-                              {objective.weightage}%
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {objective.num_activities} activities
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {objective.creator?.full_name || objective.creator?.email}
-                          </TableCell>
-                          <TableCell className="text-sm text-gray-600">
-                            {new Date(objective.created_at).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleViewUpdates(objective.id, objective.title)}
-                                title="View updates for this objective"
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-blue-600 border-blue-600">
+                                {objective.weightage}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">
+                                {objective.num_activities} activities
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant={progress >= 80 ? "default" : "secondary"}
+                                className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
                               >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEdit(objective)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-red-600 hover:text-red-700"
-                                onClick={() => handleDelete(objective.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                {progress}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-600">
+                              {objective.creator?.full_name || objective.creator?.email}
+                            </TableCell>
+                            <TableCell className="text-sm text-gray-600">
+                              {new Date(objective.created_at).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleViewUpdates(objective.id, objective.title)}
+                                  title="View updates for this objective"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEdit(objective)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
+                                  onClick={() => handleDelete(objective.id)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -640,56 +698,68 @@ export const ObjectivesPage = () => {
                     <TableHead>Owner</TableHead>
                     <TableHead>Weightage</TableHead>
                     <TableHead>Activities</TableHead>
+                    <TableHead>Progress</TableHead>
                     <TableHead>Created By</TableHead>
                     <TableHead>Created Date</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {objectives.map((objective) => (
-                    <TableRow key={objective.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{objective.title}</div>
-                          <div className="text-sm text-gray-600 max-w-xs truncate">
-                            {objective.description}
+                  {objectives.map((objective) => {
+                    const progress = objectiveProgress[objective.id] || 0;
+                    return (
+                      <TableRow key={objective.id}>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">{objective.title}</div>
+                            <div className="text-sm text-gray-600 max-w-xs truncate">
+                              {objective.description}
+                            </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
-                          <div className="text-gray-600">{objective.owner?.email}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-blue-600 border-blue-600">
-                          {objective.weightage}%
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {objective.num_activities} activities
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {objective.creator?.full_name || objective.creator?.email}
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {new Date(objective.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleViewUpdates(objective.id, objective.title)}
-                          title="View updates for this objective"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
+                            <div className="text-gray-600">{objective.owner?.email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-blue-600 border-blue-600">
+                            {objective.weightage}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {objective.num_activities} activities
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={progress >= 80 ? "default" : "secondary"}
+                            className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
+                          >
+                            {progress}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {objective.creator?.full_name || objective.creator?.email}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {new Date(objective.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewUpdates(objective.id, objective.title)}
+                            title="View updates for this objective"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
