@@ -77,9 +77,22 @@ export const SuperAdminPage = () => {
       ]);
     } catch (error) {
       console.error('Error loading data:', error);
+      
+      // Extract specific error message from Edge Function response
+      let errorMessage = "Failed to load super admin data";
+      
+      if (error && typeof error === 'object') {
+        // Check for Edge Function specific error details
+        if ('details' in error && error.details) {
+          errorMessage = `Edge Function Error: ${error.details}`;
+        } else if ('message' in error && error.message) {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: "Error",
-        description: "Failed to load super admin data",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -93,7 +106,14 @@ export const SuperAdminPage = () => {
         method: 'GET'
       });
 
-      if (error) throw error;
+      if (error) {
+        // Enhance error with more specific details
+        const enhancedError = new Error(`System Settings Error: ${error.message || 'Unknown error'}`);
+        if (error.details) {
+          (enhancedError as any).details = error.details;
+        }
+        throw enhancedError;
+      }
 
       setSystemSettings(data.settings || []);
       setComponentPermissions(data.permissions || []);
@@ -132,7 +152,10 @@ export const SuperAdminPage = () => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        const errorMessage = error.details || error.message || 'Unknown error occurred';
+        throw new Error(`Failed to update system setting: ${errorMessage}`);
+      }
 
       toast({
         title: "Success",
@@ -144,7 +167,7 @@ export const SuperAdminPage = () => {
       console.error('Error updating system setting:', error);
       toast({
         title: "Error",
-        description: "Failed to update system setting",
+        description: error instanceof Error ? error.message : "Failed to update system setting",
         variant: "destructive",
       });
     }
@@ -160,7 +183,10 @@ export const SuperAdminPage = () => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        const errorMessage = error.details || error.message || 'Unknown error occurred';
+        throw new Error(`Failed to update component permission: ${errorMessage}`);
+      }
 
       toast({
         title: "Success",
@@ -172,7 +198,7 @@ export const SuperAdminPage = () => {
       console.error('Error updating component permission:', error);
       toast({
         title: "Error",
-        description: "Failed to update component permission",
+        description: error instanceof Error ? error.message : "Failed to update component permission",
         variant: "destructive",
       });
     }
@@ -189,7 +215,10 @@ export const SuperAdminPage = () => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        const errorMessage = error.details || error.message || 'Unknown error occurred';
+        throw new Error(`Failed to ${action} user: ${errorMessage}`);
+      }
 
       toast({
         title: "Success",
@@ -201,7 +230,7 @@ export const SuperAdminPage = () => {
       console.error(`Error ${action} user:`, error);
       toast({
         title: "Error",
-        description: `Failed to ${action} user`,
+        description: error instanceof Error ? error.message : `Failed to ${action} user`,
         variant: "destructive",
       });
     }
