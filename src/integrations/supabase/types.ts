@@ -103,6 +103,7 @@ export type Database = {
           id: string
           num_activities: number
           owner_id: string
+          target_completion_date: string
           title: string
           updated_at: string
           weightage: number
@@ -114,6 +115,7 @@ export type Database = {
           id?: string
           num_activities: number
           owner_id: string
+          target_completion_date?: string
           title: string
           updated_at?: string
           weightage: number
@@ -125,6 +127,7 @@ export type Database = {
           id?: string
           num_activities?: number
           owner_id?: string
+          target_completion_date?: string
           title?: string
           updated_at?: string
           weightage?: number

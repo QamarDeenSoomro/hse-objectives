@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Target, Eye, ArrowLeft } from "lucide-react";
+import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
@@ -24,6 +24,7 @@ interface Objective {
   owner_id: string;
   created_by: string;
   created_at: string;
+  target_completion_date: string;
   owner?: {
     full_name: string;
     email: string;
@@ -39,6 +40,29 @@ interface UserProfile {
   email: string;
   full_name: string;
 }
+
+// Helper function to get quarter info from date
+const getQuarterInfo = (dateString: string) => {
+  const date = new Date(dateString);
+  const month = date.getMonth() + 1; // getMonth() returns 0-11
+  const year = date.getFullYear();
+  
+  if (month <= 3) return { quarter: 'Q1', year };
+  if (month <= 6) return { quarter: 'Q2', year };
+  if (month <= 9) return { quarter: 'Q3', year };
+  return { quarter: 'Q4', year };
+};
+
+// Helper function to get date from quarter
+const getDateFromQuarter = (quarter: string, year: number = 2025) => {
+  switch (quarter) {
+    case 'Q1': return `${year}-03-31`;
+    case 'Q2': return `${year}-06-30`;
+    case 'Q3': return `${year}-09-30`;
+    case 'Q4': return `${year}-12-31`;
+    default: return `${year}-12-31`;
+  }
+};
 
 export const ObjectivesPage = () => {
   const { isAdmin, profile } = useAuth();
@@ -59,6 +83,7 @@ export const ObjectivesPage = () => {
     weightage: "",
     numActivities: "",
     ownerId: "",
+    targetQuarter: "Q4",
   });
 
   // Get userId from URL parameters for filtering
@@ -238,6 +263,8 @@ export const ObjectivesPage = () => {
     }
 
     try {
+      const targetDate = getDateFromQuarter(formData.targetQuarter, 2025);
+      
       const objectiveData = {
         title: formData.title,
         description: formData.description,
@@ -245,6 +272,7 @@ export const ObjectivesPage = () => {
         num_activities: parseInt(formData.numActivities),
         owner_id: isAdmin() ? formData.ownerId : profile?.id,
         created_by: profile?.id,
+        target_completion_date: targetDate,
       };
 
       if (editingObjective) {
@@ -274,7 +302,7 @@ export const ObjectivesPage = () => {
 
       setIsDialogOpen(false);
       setEditingObjective(null);
-      setFormData({ title: "", description: "", weightage: "", numActivities: "", ownerId: "" });
+      setFormData({ title: "", description: "", weightage: "", numActivities: "", ownerId: "", targetQuarter: "Q4" });
       fetchObjectives();
     } catch (error) {
       console.error('Error saving objective:', error);
@@ -288,12 +316,14 @@ export const ObjectivesPage = () => {
 
   const handleEdit = (objective: Objective) => {
     setEditingObjective(objective);
+    const quarterInfo = getQuarterInfo(objective.target_completion_date);
     setFormData({
       title: objective.title,
       description: objective.description,
       weightage: objective.weightage.toString(),
       numActivities: objective.num_activities.toString(),
       ownerId: objective.owner_id,
+      targetQuarter: quarterInfo.quarter,
     });
     setIsDialogOpen(true);
   };
@@ -324,7 +354,7 @@ export const ObjectivesPage = () => {
 
   const handleAddNew = () => {
     setEditingObjective(null);
-    setFormData({ title: "", description: "", weightage: "", numActivities: "", ownerId: "" });
+    setFormData({ title: "", description: "", weightage: "", numActivities: "", ownerId: "", targetQuarter: "Q4" });
     setIsDialogOpen(true);
   };
 
@@ -334,6 +364,7 @@ export const ObjectivesPage = () => {
 
   const ObjectiveCard = ({ objective }: { objective: Objective }) => {
     const progress = objectiveProgress[objective.id] || 0;
+    const quarterInfo = getQuarterInfo(objective.target_completion_date);
     
     return (
       <Card className="border border-gray-200 hover:shadow-md transition-shadow">
@@ -387,6 +418,10 @@ export const ObjectivesPage = () => {
                 className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
               >
                 {progress}% Achieved
+              </Badge>
+              <Badge variant="outline" className="text-purple-600 border-purple-600">
+                <Calendar className="h-3 w-3 mr-1" />
+                {quarterInfo.quarter} {quarterInfo.year}
               </Badge>
             </div>
             
@@ -521,6 +556,23 @@ export const ObjectivesPage = () => {
                     />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="targetQuarter">Target Completion Quarter</Label>
+                  <Select 
+                    value={formData.targetQuarter} 
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, targetQuarter: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select target quarter" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Q1">Q1 2025 (March 31, 2025)</SelectItem>
+                      <SelectItem value="Q2">Q2 2025 (June 30, 2025)</SelectItem>
+                      <SelectItem value="Q3">Q3 2025 (September 30, 2025)</SelectItem>
+                      <SelectItem value="Q4">Q4 2025 (December 31, 2025)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 {isAdmin() && (
                   <div className="space-y-2">
                     <Label htmlFor="owner">Objective Owner</Label>
@@ -591,6 +643,7 @@ export const ObjectivesPage = () => {
                         <TableHead>Weightage</TableHead>
                         <TableHead>Activities</TableHead>
                         <TableHead>Progress</TableHead>
+                        <TableHead>Target Date</TableHead>
                         <TableHead>Created By</TableHead>
                         <TableHead>Created Date</TableHead>
                         <TableHead>Actions</TableHead>
@@ -599,6 +652,7 @@ export const ObjectivesPage = () => {
                     <TableBody>
                       {ownerObjectives.map((objective) => {
                         const progress = objectiveProgress[objective.id] || 0;
+                        const quarterInfo = getQuarterInfo(objective.target_completion_date);
                         return (
                           <TableRow key={objective.id}>
                             <TableCell>
@@ -625,6 +679,12 @@ export const ObjectivesPage = () => {
                                 className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
                               >
                                 {progress}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-purple-600 border-purple-600">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                {quarterInfo.quarter} {quarterInfo.year}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-sm text-gray-600">
@@ -699,6 +759,7 @@ export const ObjectivesPage = () => {
                     <TableHead>Weightage</TableHead>
                     <TableHead>Activities</TableHead>
                     <TableHead>Progress</TableHead>
+                    <TableHead>Target Date</TableHead>
                     <TableHead>Created By</TableHead>
                     <TableHead>Created Date</TableHead>
                     <TableHead>Actions</TableHead>
@@ -707,6 +768,7 @@ export const ObjectivesPage = () => {
                 <TableBody>
                   {objectives.map((objective) => {
                     const progress = objectiveProgress[objective.id] || 0;
+                    const quarterInfo = getQuarterInfo(objective.target_completion_date);
                     return (
                       <TableRow key={objective.id}>
                         <TableCell>
@@ -739,6 +801,12 @@ export const ObjectivesPage = () => {
                             className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
                           >
                             {progress}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-purple-600 border-purple-600">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            {quarterInfo.quarter} {quarterInfo.year}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-gray-600">
