@@ -16,12 +16,12 @@ interface UserData {
   id: string;
   email: string;
   full_name: string | null;
-  role: "admin" | "user";
+  role: "admin" | "user" | "superadmin";
   created_at: string;
 }
 
 export const UsersPage = () => {
-  const { isAdmin, session } = useAuth();
+  const { isAdmin, isSuperAdmin, session } = useAuth();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -31,7 +31,7 @@ export const UsersPage = () => {
   const [formData, setFormData] = useState({
     email: "",
     fullName: "",
-    role: "user" as "admin" | "user",
+    role: "user" as "admin" | "user" | "superadmin",
     password: "",
   });
 
@@ -206,7 +206,23 @@ export const UsersPage = () => {
 
   const toggleUserRole = async (userId: string, currentRole: string) => {
     try {
-      const newRole = currentRole === "admin" ? "user" : "admin";
+      let newRole: "admin" | "user" | "superadmin";
+      
+      // Only superadmins can promote to superadmin or demote from superadmin
+      if (isSuperAdmin()) {
+        // Cycle through all roles for superadmins
+        if (currentRole === "user") {
+          newRole = "admin";
+        } else if (currentRole === "admin") {
+          newRole = "superadmin";
+        } else {
+          newRole = "user";
+        }
+      } else {
+        // Regular admins can only toggle between user and admin
+        newRole = currentRole === "admin" ? "user" : "admin";
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({ role: newRole })
@@ -261,6 +277,99 @@ export const UsersPage = () => {
     setIsPasswordDialogOpen(true);
   };
 
+  const getRoleBadgeVariant = (role: string) => {
+    switch (role) {
+      case "superadmin":
+        return "destructive";
+      case "admin":
+        return "secondary";
+      default:
+        return "default";
+    }
+  };
+
+  const getRoleBadgeClass = (role: string) => {
+    switch (role) {
+      case "superadmin":
+        return "bg-red-100 text-red-800";
+      case "admin":
+        return "bg-orange-100 text-orange-800";
+      default:
+        return "";
+    }
+  };
+
+  const getToggleButtonText = (currentRole: string) => {
+    if (isSuperAdmin()) {
+      // Superadmins can cycle through all roles
+      if (currentRole === "user") return "Promote to Admin";
+      if (currentRole === "admin") return "Promote to SuperAdmin";
+      return "Demote to User";
+    } else {
+      // Regular admins can only toggle between user and admin
+      return currentRole === "admin" ? "Demote to User" : "Promote to Admin";
+    }
+  };
+
+  const UserCard = ({ user }: { user: UserData }) => (
+    <Card className="border border-gray-200">
+      <CardContent className="p-4">
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-gray-900 truncate">
+                {user.full_name || user.email}
+              </h3>
+              <p className="text-sm text-gray-600">{user.email}</p>
+            </div>
+            <Badge 
+              variant={getRoleBadgeVariant(user.role)}
+              className={getRoleBadgeClass(user.role)}
+            >
+              {user.role === "superadmin" && <Shield className="h-3 w-3 mr-1" />}
+              {user.role.toUpperCase()}
+            </Badge>
+          </div>
+          
+          <div className="text-sm text-gray-500">
+            Created: {new Date(user.created_at).toLocaleDateString()}
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toggleUserRole(user.id, user.role)}
+              className="flex-1 sm:flex-none"
+              disabled={user.role === "superadmin" && !isSuperAdmin()}
+            >
+              <Edit className="h-4 w-4 mr-1" />
+              {getToggleButtonText(user.role)}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleChangePassword(user)}
+              className="flex-1 sm:flex-none"
+            >
+              <Key className="h-4 w-4 mr-1" />
+              Password
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 hover:text-red-700 flex-1 sm:flex-none"
+              onClick={() => deleteUser(user.id)}
+              disabled={user.role === "superadmin" && !isSuperAdmin()}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   if (!isAdmin()) {
     return (
       <div className="p-6">
@@ -284,62 +393,6 @@ export const UsersPage = () => {
       </div>
     );
   }
-
-  const UserCard = ({ user }: { user: UserData }) => (
-    <Card className="border border-gray-200">
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h3 className="font-medium text-gray-900 truncate">
-                {user.full_name || user.email}
-              </h3>
-              <p className="text-sm text-gray-600">{user.email}</p>
-            </div>
-            <Badge 
-              variant={user.role === "admin" ? "destructive" : "default"}
-              className={user.role === "admin" ? "bg-red-100 text-red-800" : ""}
-            >
-              {user.role}
-            </Badge>
-          </div>
-          
-          <div className="text-sm text-gray-500">
-            Created: {new Date(user.created_at).toLocaleDateString()}
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toggleUserRole(user.id, user.role)}
-              className="flex-1 sm:flex-none"
-            >
-              <Edit className="h-4 w-4 mr-1" />
-              {user.role === "admin" ? "Demote" : "Promote"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleChangePassword(user)}
-              className="flex-1 sm:flex-none"
-            >
-              <Key className="h-4 w-4 mr-1" />
-              Password
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-red-600 hover:text-red-700 flex-1 sm:flex-none"
-              onClick={() => deleteUser(user.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="p-4 md:p-6 space-y-6">
@@ -393,7 +446,7 @@ export const UsersPage = () => {
                 <Label htmlFor="role">Role</Label>
                 <Select 
                   value={formData.role} 
-                  onValueChange={(value: "admin" | "user") => setFormData(prev => ({ ...prev, role: value }))}
+                  onValueChange={(value: "admin" | "user" | "superadmin") => setFormData(prev => ({ ...prev, role: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -401,6 +454,9 @@ export const UsersPage = () => {
                   <SelectContent>
                     <SelectItem value="user">User</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
+                    {isSuperAdmin() && (
+                      <SelectItem value="superadmin">Super Admin</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -468,7 +524,7 @@ export const UsersPage = () => {
       </Dialog>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
         <Card className="border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -496,13 +552,26 @@ export const UsersPage = () => {
         <Card className="border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Administrators</CardTitle>
-            <Shield className="h-4 w-4 text-red-600" />
+            <Shield className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {users.filter(user => user.role === "admin").length}
             </div>
             <p className="text-xs text-gray-600">Admin accounts</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-0 shadow-lg">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Super Admins</CardTitle>
+            <Shield className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {users.filter(user => user.role === "superadmin").length}
+            </div>
+            <p className="text-xs text-gray-600">Super admin accounts</p>
           </CardContent>
         </Card>
       </div>
@@ -539,10 +608,11 @@ export const UsersPage = () => {
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
                       <Badge 
-                        variant={user.role === "admin" ? "destructive" : "default"}
-                        className={user.role === "admin" ? "bg-red-100 text-red-800" : ""}
+                        variant={getRoleBadgeVariant(user.role)}
+                        className={getRoleBadgeClass(user.role)}
                       >
-                        {user.role}
+                        {user.role === "superadmin" && <Shield className="h-3 w-3 mr-1" />}
+                        {user.role.toUpperCase()}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm text-gray-600">
@@ -554,9 +624,10 @@ export const UsersPage = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => toggleUserRole(user.id, user.role)}
+                          disabled={user.role === "superadmin" && !isSuperAdmin()}
                         >
                           <Edit className="h-4 w-4 mr-1" />
-                          {user.role === "admin" ? "Demote" : "Promote"}
+                          {getToggleButtonText(user.role)}
                         </Button>
                         <Button
                           variant="outline"
@@ -571,6 +642,7 @@ export const UsersPage = () => {
                           size="sm"
                           className="text-red-600 hover:text-red-700"
                           onClick={() => deleteUser(user.id)}
+                          disabled={user.role === "superadmin" && !isSuperAdmin()}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
