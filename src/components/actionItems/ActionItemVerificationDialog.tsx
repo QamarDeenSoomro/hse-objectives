@@ -53,6 +53,10 @@ export const ActionItemVerificationDialog = ({
 
   if (!actionItem) return null;
 
+  // Provide fallback values to prevent undefined errors
+  const priority = actionItem.priority || 'medium';
+  const status = actionItem.status || 'open';
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
@@ -73,7 +77,7 @@ export const ActionItemVerificationDialog = ({
             <div className="text-sm text-gray-700 space-y-2">
               <p><strong>Title:</strong> {actionItem.title}</p>
               <p><strong>Target Date:</strong> {new Date(actionItem.target_date).toLocaleDateString()}</p>
-              <p><strong>Priority:</strong> {actionItem.priority.toUpperCase()}</p>
+              <p><strong>Priority:</strong> {priority.toUpperCase()}</p>
               <p><strong>Assigned To:</strong> {actionItem.assigned_user?.full_name || actionItem.assigned_user?.email}</p>
               {actionItem.description && (
                 <p><strong>Description:</strong> {actionItem.description}</p>
