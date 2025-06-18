@@ -106,17 +106,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
+      // Check if there's a current session before attempting to sign out
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
       
-      // If there's any error (including session_not_found), clear the client-side state
-      if (error) {
-        console.warn('Logout error:', error);
-        // Explicitly clear the client-side state
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        return;
+      if (currentSession) {
+        // Only attempt server-side logout if a session exists
+        const { error } = await supabase.auth.signOut();
+        
+        if (error) {
+          console.warn('Logout error:', error);
+        }
       }
+      
+      // Always clear the client-side state regardless of server response
+      setSession(null);
+      setUser(null);
+      setProfile(null);
     } catch (error) {
       // Handle any unexpected errors and clear state
       console.warn('Logout error:', error);
