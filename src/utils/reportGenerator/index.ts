@@ -1,4 +1,3 @@
-
 import { generateCSV } from "./csvGenerator";
 import { generatePDF } from "./pdfGenerator";
 import { downloadFile } from "./downloadFile";
@@ -7,6 +6,7 @@ import { generateProgressReportData } from "./progressReport";
 import { generateTeamPerformanceData } from "./teamPerformance";
 import { generateDailyWorkSummaryData } from "./dailyWorkSummary";
 import { generateActivityTimelineData } from "./activityTimeline";
+import { generateActionItemsReportData } from "./actionItemsReport";
 
 export interface ReportData {
   type: string;
@@ -25,4 +25,5 @@ export {
   generateTeamPerformanceData,
   generateDailyWorkSummaryData,
   generateActivityTimelineData,
+  generateActionItemsReportData,
 };
