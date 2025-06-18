@@ -53,6 +53,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const clearAuthState = () => {
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+  };
+
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -74,7 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    // Check for existing session
+    // Check for existing session with error handling for invalid refresh tokens
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -82,6 +88,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (session?.user) {
         fetchProfile(session.user.id).then(setProfile);
       }
+      setLoading(false);
+    }).catch((error) => {
+      console.error('Error getting session:', error);
+      
+      // Check if the error is related to invalid refresh token
+      const errorMessage = error?.message || '';
+      if (errorMessage.includes('Invalid Refresh Token') || 
+          errorMessage.includes('refresh_token_not_found') ||
+          error?.code === 'refresh_token_not_found') {
+        console.info('Invalid refresh token detected, clearing session state');
+        clearAuthState();
+        // Sign out to clear any corrupted local storage
+        supabase.auth.signOut().catch(() => {
+          // Ignore errors during cleanup signout
+        });
+      }
+      
       setLoading(false);
     });
 
@@ -106,32 +129,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
-      // Check if there's an active session before attempting to sign out
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      // Simply sign out - this will clear the session
+      const { error } = await supabase.auth.signOut();
       
-      if (currentSession) {
-        // Only attempt to sign out if there's an active session
-        const { error } = await supabase.auth.signOut();
-        
-        if (error) {
-          // Handle the specific 'session_not_found' case as informational
-          if (error.message?.includes('session_not_found') || 
-              error.message?.includes('Session from session_id claim in JWT does not exist') ||
-              (error as any).status === 403 ||
-              (error as any).code === 'session_not_found') {
-            console.info('Session already cleared on server:', error.message);
-          } else {
-            console.error('Logout error:', error);
-          }
+      if (error) {
+        // Handle the specific 'session_not_found' case as informational
+        if (error.message?.includes('session_not_found') || 
+            error.message?.includes('Session from session_id claim in JWT does not exist') ||
+            (error as any).status === 403 ||
+            (error as any).code === 'session_not_found') {
+          console.info('Session already cleared on server:', error.message);
+        } else {
+          console.error('Logout error:', error);
         }
-      } else {
-        console.warn('No active session found. User might already be logged out.');
       }
-      
-      // Always clear the client-side state regardless of server response
-      setSession(null);
-      setUser(null);
-      setProfile(null);
     } catch (error) {
       // Handle any unexpected errors - check for session-related errors first
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -143,11 +154,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         console.error('Logout error:', error);
       }
-      
-      // Always clear the client-side state regardless of error
-      setSession(null);
-      setUser(null);
-      setProfile(null);
+    } finally {
+      // Always clear the client-side state regardless of server response
+      clearAuthState();
     }
   };
 
