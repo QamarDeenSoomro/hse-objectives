@@ -5,13 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar } from "lucide-react";
+import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
@@ -62,6 +63,25 @@ const getDateFromQuarter = (quarter: string, year: number = 2025) => {
     case 'Q4': return `${year}-12-31`;
     default: return `${year}-12-31`;
   }
+};
+
+// Helper function to calculate planned progress based on time elapsed
+const calculatePlannedProgress = (targetDate: string) => {
+  const startDate = new Date('2025-01-01');
+  const endDate = new Date(targetDate);
+  const currentDate = new Date();
+  
+  // If current date is before start date, planned progress is 0
+  if (currentDate < startDate) return 0;
+  
+  // If current date is after end date, planned progress is 100
+  if (currentDate > endDate) return 100;
+  
+  const totalDuration = endDate.getTime() - startDate.getTime();
+  const elapsedDuration = currentDate.getTime() - startDate.getTime();
+  
+  const plannedProgress = (elapsedDuration / totalDuration) * 100;
+  return Math.round(Math.max(0, Math.min(100, plannedProgress)));
 };
 
 export const ObjectivesPage = () => {
@@ -364,6 +384,7 @@ export const ObjectivesPage = () => {
 
   const ObjectiveCard = ({ objective }: { objective: Objective }) => {
     const progress = objectiveProgress[objective.id] || 0;
+    const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
     const quarterInfo = getQuarterInfo(objective.target_completion_date);
     
     return (
@@ -423,6 +444,44 @@ export const ObjectivesPage = () => {
                 <Calendar className="h-3 w-3 mr-1" />
                 {quarterInfo.quarter} {quarterInfo.year}
               </Badge>
+            </div>
+
+            {/* Progress Bars */}
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Actual Progress</span>
+                  <span className="font-medium">{progress}%</span>
+                </div>
+                <Progress value={progress} className="h-2" />
+              </div>
+              
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Planned Progress
+                  </span>
+                  <span className="font-medium">{plannedProgress}%</span>
+                </div>
+                <Progress 
+                  value={plannedProgress} 
+                  className="h-2" 
+                  style={{
+                    '--progress-background': plannedProgress > progress ? '#ef4444' : '#10b981'
+                  } as React.CSSProperties}
+                />
+              </div>
+              
+              {plannedProgress !== progress && (
+                <div className="text-xs text-gray-500">
+                  {progress > plannedProgress ? (
+                    <span className="text-green-600">✓ Ahead of schedule by {progress - plannedProgress}%</span>
+                  ) : (
+                    <span className="text-red-600">⚠ Behind schedule by {plannedProgress - progress}%</span>
+                  )}
+                </div>
+              )}
             </div>
             
             {isAdmin() && (
@@ -643,6 +702,7 @@ export const ObjectivesPage = () => {
                         <TableHead>Weightage</TableHead>
                         <TableHead>Activities</TableHead>
                         <TableHead>Progress</TableHead>
+                        <TableHead>Planned</TableHead>
                         <TableHead>Target Date</TableHead>
                         <TableHead>Created By</TableHead>
                         <TableHead>Created Date</TableHead>
@@ -652,6 +712,7 @@ export const ObjectivesPage = () => {
                     <TableBody>
                       {ownerObjectives.map((objective) => {
                         const progress = objectiveProgress[objective.id] || 0;
+                        const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
                         const quarterInfo = getQuarterInfo(objective.target_completion_date);
                         return (
                           <TableRow key={objective.id}>
@@ -679,6 +740,15 @@ export const ObjectivesPage = () => {
                                 className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
                               >
                                 {progress}%
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge 
+                                variant="outline" 
+                                className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
+                              >
+                                <Clock className="h-3 w-3 mr-1" />
+                                {plannedProgress}%
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -759,6 +829,7 @@ export const ObjectivesPage = () => {
                     <TableHead>Weightage</TableHead>
                     <TableHead>Activities</TableHead>
                     <TableHead>Progress</TableHead>
+                    <TableHead>Planned</TableHead>
                     <TableHead>Target Date</TableHead>
                     <TableHead>Created By</TableHead>
                     <TableHead>Created Date</TableHead>
@@ -768,6 +839,7 @@ export const ObjectivesPage = () => {
                 <TableBody>
                   {objectives.map((objective) => {
                     const progress = objectiveProgress[objective.id] || 0;
+                    const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
                     const quarterInfo = getQuarterInfo(objective.target_completion_date);
                     return (
                       <TableRow key={objective.id}>
@@ -801,6 +873,15 @@ export const ObjectivesPage = () => {
                             className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
                           >
                             {progress}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="outline" 
+                            className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
+                          >
+                            <Clock className="h-3 w-3 mr-1" />
+                            {plannedProgress}%
                           </Badge>
                         </TableCell>
                         <TableCell>
