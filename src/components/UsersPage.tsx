@@ -285,12 +285,68 @@ export const UsersPage = () => {
     );
   }
 
+  const UserCard = ({ user }: { user: UserData }) => (
+    <Card className="border border-gray-200">
+      <CardContent className="p-4">
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-gray-900 truncate">
+                {user.full_name || user.email}
+              </h3>
+              <p className="text-sm text-gray-600">{user.email}</p>
+            </div>
+            <Badge 
+              variant={user.role === "admin" ? "destructive" : "default"}
+              className={user.role === "admin" ? "bg-red-100 text-red-800" : ""}
+            >
+              {user.role}
+            </Badge>
+          </div>
+          
+          <div className="text-sm text-gray-500">
+            Created: {new Date(user.created_at).toLocaleDateString()}
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toggleUserRole(user.id, user.role)}
+              className="flex-1 sm:flex-none"
+            >
+              <Edit className="h-4 w-4 mr-1" />
+              {user.role === "admin" ? "Demote" : "Promote"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleChangePassword(user)}
+              className="flex-1 sm:flex-none"
+            >
+              <Key className="h-4 w-4 mr-1" />
+              Password
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 hover:text-red-700 flex-1 sm:flex-none"
+              onClick={() => deleteUser(user.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-600 mt-1">Manage user accounts and permissions</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">User Management</h1>
+          <p className="text-gray-600 mt-1 text-sm md:text-base">Manage user accounts and permissions</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -412,7 +468,7 @@ export const UsersPage = () => {
       </Dialog>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         <Card className="border-0 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
@@ -462,7 +518,8 @@ export const UsersPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* Desktop Table View */}
+          <div className="hidden lg:block">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -523,6 +580,13 @@ export const UsersPage = () => {
                 ))}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="lg:hidden space-y-4">
+            {users.map((user) => (
+              <UserCard key={user.id} user={user} />
+            ))}
           </div>
         </CardContent>
       </Card>

@@ -304,30 +304,98 @@ export const ObjectivesPage = () => {
     );
   }
 
+  const ObjectiveCard = ({ objective }: { objective: Objective }) => (
+    <Card className="border border-gray-200 hover:shadow-md transition-shadow">
+      <CardContent className="p-4">
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-gray-900 truncate">{objective.title}</h3>
+              <p className="text-sm text-gray-600 mt-1 line-clamp-2">{objective.description}</p>
+            </div>
+            <div className="flex gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleViewUpdates(objective.id, objective.title)}
+                title="View updates for this objective"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+              {isAdmin() && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(objective)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => handleDelete(objective.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Badge variant="outline" className="text-blue-600 border-blue-600">
+              {objective.weightage}% Weight
+            </Badge>
+            <Badge variant="secondary">
+              {objective.num_activities} activities
+            </Badge>
+          </div>
+          
+          {isAdmin() && (
+            <div className="text-xs text-gray-500 space-y-1">
+              <div>Owner: {objective.owner?.full_name || objective.owner?.email}</div>
+              <div>Created by: {objective.creator?.full_name || objective.creator?.email}</div>
+              <div>Created: {new Date(objective.created_at).toLocaleDateString()}</div>
+            </div>
+          )}
+          
+          {!isAdmin() && (
+            <div className="text-xs text-gray-500 space-y-1">
+              <div>Created by: {objective.creator?.full_name || objective.creator?.email}</div>
+              <div>Created: {new Date(objective.created_at).toLocaleDateString()}</div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             {userIdFromUrl && isAdmin() && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleBackToDashboard}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 self-start"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Back to Dashboard
               </Button>
             )}
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
                 {userIdFromUrl && filteredUser 
                   ? `${filteredUser.full_name || filteredUser.email}'s Objectives`
                   : "Objectives Management"
                 }
               </h1>
-              <p className="text-gray-600 mt-1">
+              <p className="text-gray-600 mt-1 text-sm md:text-base">
                 {userIdFromUrl && filteredUser
                   ? `Viewing objectives assigned to ${filteredUser.full_name || filteredUser.email}`
                   : "Manage HSE objectives and track progress."
@@ -446,7 +514,7 @@ export const ObjectivesPage = () => {
       </div>
 
       {isAdmin() ? (
-        <div className="">
+        <div className="space-y-6">
           {Object.entries(
             objectives.reduce((acc, objective) => {
               const ownerName = objective.owner?.full_name || objective.owner?.email || objective.owner_id || "Unknown Owner";
@@ -457,7 +525,7 @@ export const ObjectivesPage = () => {
               return acc;
             }, {} as Record<string, Objective[]>)
           ).map(([ownerName, ownerObjectives]) => (
-            <Card key={ownerName} className="border-0 shadow-lg mb-6">
+            <Card key={ownerName} className="border-0 shadow-lg">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Target className="h-5 w-5 text-blue-600" />
@@ -468,7 +536,8 @@ export const ObjectivesPage = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
+                {/* Desktop Table View */}
+                <div className="hidden lg:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -539,6 +608,13 @@ export const ObjectivesPage = () => {
                     </TableBody>
                   </Table>
                 </div>
+
+                {/* Mobile Card View */}
+                <div className="lg:hidden space-y-4">
+                  {ownerObjectives.map((objective) => (
+                    <ObjectiveCard key={objective.id} objective={objective} />
+                  ))}
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -555,7 +631,8 @@ export const ObjectivesPage = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="hidden lg:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -615,6 +692,13 @@ export const ObjectivesPage = () => {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="lg:hidden space-y-4">
+              {objectives.map((objective) => (
+                <ObjectiveCard key={objective.id} objective={objective} />
+              ))}
             </div>
           </CardContent>
         </Card>
