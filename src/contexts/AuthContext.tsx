@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
@@ -7,7 +6,7 @@ interface UserProfile {
   id: string;
   email: string;
   full_name: string | null;
-  role: "admin" | "user";
+  role: "admin" | "user" | "superadmin";
 }
 
 interface AuthContextType {
@@ -18,6 +17,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isAdmin: () => boolean;
+  isSuperAdmin: () => boolean;
   updatePassword: (password: string) => Promise<{ success: boolean; error?: Error | null }>;
 }
 
@@ -108,7 +108,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
   };
 
-  const isAdmin = () => profile?.role === "admin";
+  const isAdmin = () => profile?.role === "admin" || profile?.role === "superadmin";
+  const isSuperAdmin = () => profile?.role === "superadmin";
 
   const updatePassword = async (newPassword: string) => {
     setLoading(true);
@@ -135,6 +136,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     login,
     logout,
     isAdmin,
+    isSuperAdmin,
     updatePassword,
   };
 

@@ -9,6 +9,60 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      component_permissions: {
+        Row: {
+          component_name: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_enabled: boolean | null
+          permission_type: string
+          role_required: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+          updated_by: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          component_name: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          permission_type: string
+          role_required: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          updated_by?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          component_name?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          permission_type?: string
+          role_required?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          updated_by?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "component_permissions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "component_permissions_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_work: {
         Row: {
           admin_comments: string | null
@@ -176,20 +230,90 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_settings_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      check_component_permission: {
+        Args: {
+          component_name: string
+          permission_type: string
+          user_role?: Database["public"]["Enums"]["app_role"]
+        }
+        Returns: boolean
+      }
+      get_system_setting: {
+        Args: {
+          setting_key: string
+        }
+        Returns: Json
+      }
       has_role: {
         Args:
           | { _user_id: string; _role: Database["public"]["Enums"]["app_role"] }
           | { user_id: number; role_name: string }
         Returns: boolean
       }
+      update_system_setting: {
+        Args: {
+          setting_key: string
+          setting_value: Json
+          description?: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      app_role: "admin" | "user"
+      app_role: "admin" | "user" | "superadmin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -294,7 +418,7 @@ export type CompositeTypes<
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof Database
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof (Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"])
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
   ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
@@ -305,7 +429,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "user"],
+      app_role: ["admin", "user", "superadmin"],
     },
   },
 } as const

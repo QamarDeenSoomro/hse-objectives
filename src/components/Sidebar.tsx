@@ -12,7 +12,8 @@ import {
   Shield,
   Menu,
   Calendar,
-  FileText
+  FileText,
+  Settings
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -23,7 +24,7 @@ interface SidebarProps {
 }
 
 export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isSuperAdmin } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,6 +37,7 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
     ...(isAdmin() ? [{ id: "reports", label: "Reports", icon: FileText }] : []),
     ...(isAdmin() ? [{ id: "reports-dashboard", label: "Reports Dashboard", icon: LayoutDashboard }] : []),
     ...(isAdmin() ? [{ id: "users", label: "Users", icon: Users }] : []),
+    ...(isSuperAdmin() ? [{ id: "superadmin", label: "Super Admin", icon: Settings }] : []),
     { id: "profile", label: "Profile", icon: User },
   ];
 
@@ -87,12 +89,16 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
                 "w-full justify-start transition-all duration-200",
                 isActive 
                   ? "bg-gradient-to-r from-blue-600 to-green-600 text-white shadow-md" 
-                  : "hover:bg-gray-100"
+                  : "hover:bg-gray-100",
+                item.id === "superadmin" && "border-2 border-red-200 bg-red-50 hover:bg-red-100 text-red-700"
               )}
               onClick={() => handleMenuClick(item.id)}
             >
               <Icon className="mr-3 h-4 w-4" />
               {item.label}
+              {item.id === "superadmin" && (
+                <Shield className="ml-auto h-3 w-3" />
+              )}
             </Button>
           );
         })}
@@ -101,11 +107,12 @@ export const Sidebar = ({ currentPage, setCurrentPage }: SidebarProps) => {
       <div className="p-4 border-t border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <span className="text-sm font-medium text-gray-600">
-            {isAdmin() ? "Admin User" : "Standard User"}
+            {isSuperAdmin() ? "Super Admin" : isAdmin() ? "Admin User" : "Standard User"}
           </span>
           <div className={cn(
             "px-2 py-1 rounded-full text-xs font-medium",
-            isAdmin() ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"
+            isSuperAdmin() ? "bg-red-100 text-red-800" : 
+            isAdmin() ? "bg-orange-100 text-orange-800" : "bg-blue-100 text-blue-800"
           )}>
             {user?.role}
           </div>

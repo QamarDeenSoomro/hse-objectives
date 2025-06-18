@@ -6,6 +6,7 @@ import { UpdatesPage } from "@/components/UpdatesPage";
 import { DailyWorkPage } from "@/components/DailyWorkPage";
 import { ReportsPage } from "@/components/ReportsPage";
 import { UsersPage } from "@/components/UsersPage";
+import { SuperAdminPage } from "@/components/SuperAdminPage";
 import { ProfilePage } from "@/components/ProfilePage";
 import { LoginPage } from "@/components/LoginPage";
 import { useAuth } from "@/contexts/AuthContext";
@@ -45,6 +46,8 @@ const Index = () => {
         return <ReportsPage />;
       case "users":
         return <UsersPage />;
+      case "superadmin":
+        return <SuperAdminPage />;
       case "profile":
         return <ProfilePage />;
       default:
