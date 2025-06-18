@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
+import { PlannedVsActualChart } from "@/components/PlannedVsActualChart";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar, Clock } from "lucide-react";
@@ -446,42 +447,52 @@ export const ObjectivesPage = () => {
               </Badge>
             </div>
 
-            {/* Progress Bars */}
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Actual Progress</span>
-                  <span className="font-medium">{progress}%</span>
+            {/* Progress Bars and Chart */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Traditional Progress Bars */}
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600">Actual Progress</span>
+                    <span className="font-medium">{progress}%</span>
+                  </div>
+                  <Progress value={progress} className="h-2" />
                 </div>
-                <Progress value={progress} className="h-2" />
+                
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Planned Progress
+                    </span>
+                    <span className="font-medium">{plannedProgress}%</span>
+                  </div>
+                  <Progress 
+                    value={plannedProgress} 
+                    className="h-2" 
+                    style={{
+                      '--progress-background': plannedProgress > progress ? '#ef4444' : '#10b981'
+                    } as React.CSSProperties}
+                  />
+                </div>
+                
+                {plannedProgress !== progress && (
+                  <div className="text-xs text-gray-500">
+                    {progress > plannedProgress ? (
+                      <span className="text-green-600">✓ Ahead of schedule by {progress - plannedProgress}%</span>
+                    ) : (
+                      <span className="text-red-600">⚠ Behind schedule by {plannedProgress - progress}%</span>
+                    )}
+                  </div>
+                )}
               </div>
-              
-              <div className="space-y-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600 flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    Planned Progress
-                  </span>
-                  <span className="font-medium">{plannedProgress}%</span>
-                </div>
-                <Progress 
-                  value={plannedProgress} 
-                  className="h-2" 
-                  style={{
-                    '--progress-background': plannedProgress > progress ? '#ef4444' : '#10b981'
-                  } as React.CSSProperties}
-                />
-              </div>
-              
-              {plannedProgress !== progress && (
-                <div className="text-xs text-gray-500">
-                  {progress > plannedProgress ? (
-                    <span className="text-green-600">✓ Ahead of schedule by {progress - plannedProgress}%</span>
-                  ) : (
-                    <span className="text-red-600">⚠ Behind schedule by {plannedProgress - progress}%</span>
-                  )}
-                </div>
-              )}
+
+              {/* Bar Chart */}
+              <PlannedVsActualChart
+                actualProgress={progress}
+                plannedProgress={plannedProgress}
+                title={objective.title}
+              />
             </div>
             
             {isAdmin() && (
