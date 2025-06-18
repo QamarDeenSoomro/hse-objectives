@@ -108,17 +108,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const { error } = await supabase.auth.signOut();
       
-      // If the error is "session_not_found", treat it as a successful logout
-      // since the session is already invalid on the server
-      if (error && error.message && error.message.includes('session_not_found')) {
-        // Session is already invalid, which is effectively a successful logout
+      // If there's any error (including session_not_found), clear the client-side state
+      if (error) {
+        console.warn('Logout error:', error);
+        // Explicitly clear the client-side state
+        setSession(null);
+        setUser(null);
+        setProfile(null);
         return;
       }
-      
-      if (error) throw error;
     } catch (error) {
-      // Handle other logout errors that aren't session_not_found
+      // Handle any unexpected errors and clear state
       console.warn('Logout error:', error);
+      setSession(null);
+      setUser(null);
+      setProfile(null);
     }
   };
 
