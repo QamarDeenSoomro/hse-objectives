@@ -1,302 +1,35 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
+import { ArrowLeft, Target } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Target, Eye, ArrowLeft, Calendar, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, useNavigate } from "react-router-dom";
 
-// Types
-interface Objective {
-  id: string;
-  title: string;
-  description: string;
-  weightage: number;
-  num_activities: number;
-  owner_id: string;
-  created_by: string;
-  created_at: string;
-  target_completion_date: string;
-  owner?: {
-    full_name: string;
-    email: string;
-  };
-  creator?: {
-    full_name: string;
-    email: string;
-  };
-}
+// Components
+import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
+import { ObjectiveFormDialog } from "@/components/objectives/ObjectiveFormDialog";
+import { ObjectiveCard } from "@/components/objectives/ObjectiveCard";
+import { ObjectiveTableView } from "@/components/objectives/ObjectiveTableView";
 
-interface UserProfile {
-  id: string;
-  email: string;
-  full_name: string;
-}
+// Types and utilities
+import { Objective, UserProfile, ObjectiveFormData } from "@/types/objectives";
+import { getQuarterInfo } from "@/utils/objectives";
+import { useObjectivesData } from "@/hooks/useObjectivesData";
 
-interface ObjectiveFormData {
-  title: string;
-  description: string;
-  weightage: string;
-  numActivities: string;
-  ownerId: string;
-  targetQuarter: string;
-}
-
-// Constants
-const QUARTERS = [
-  { value: 'Q1', label: 'Q1 2025 (March 31, 2025)' },
-  { value: 'Q2', label: 'Q2 2025 (June 30, 2025)' },
-  { value: 'Q3', label: 'Q3 2025 (September 30, 2025)' },
-  { value: 'Q4', label: 'Q4 2025 (December 31, 2025)' },
-];
-
-// Utility functions
-const getQuarterInfo = (dateString: string) => {
-  const date = new Date(dateString);
-  const month = date.getMonth() + 1;
-  const year = date.getFullYear();
-  
-  if (month <= 3) return { quarter: 'Q1', year };
-  if (month <= 6) return { quarter: 'Q2', year };
-  if (month <= 9) return { quarter: 'Q3', year };
-  return { quarter: 'Q4', year };
-};
-
-const getDateFromQuarter = (quarter: string, year: number = 2025) => {
-  const quarterDates = {
-    'Q1': `${year}-03-31`,
-    'Q2': `${year}-06-30`,
-    'Q3': `${year}-09-30`,
-    'Q4': `${year}-12-31`,
-  };
-  return quarterDates[quarter as keyof typeof quarterDates] || `${year}-12-31`;
-};
-
-const calculatePlannedProgress = (targetDate: string) => {
-  const startDate = new Date('2025-01-01');
-  const endDate = new Date(targetDate);
-  const currentDate = new Date();
-  
-  if (currentDate < startDate) return 0;
-  if (currentDate > endDate) return 100;
-  
-  const totalDuration = endDate.getTime() - startDate.getTime();
-  const elapsedDuration = currentDate.getTime() - startDate.getTime();
-  
-  const plannedProgress = (elapsedDuration / totalDuration) * 100;
-  return Math.round(Math.max(0, Math.min(100, plannedProgress)));
-};
-
-// Helper function to calculate cumulative progress for an objective
-const calculateCumulativeProgress = (updates: any[], numActivities: number) => {
-  if (!updates || updates.length === 0) return 0;
-  
-  // Sort updates by date to ensure proper cumulative calculation
-  const sortedUpdates = updates.sort((a, b) => new Date(a.update_date).getTime() - new Date(b.update_date).getTime());
-  
-  // Sum all achieved counts to get total cumulative count
-  const totalAchievedCount = sortedUpdates.reduce((total, update) => total + (update.achieved_count || 0), 0);
-  
-  // Calculate raw progress percentage
-  const rawProgress = (totalAchievedCount / numActivities) * 100;
-  
-  // Apply efficiency from the latest update (or 100% if no efficiency set)
-  const latestUpdate = sortedUpdates[sortedUpdates.length - 1];
-  const efficiency = latestUpdate?.efficiency || 100;
-  const effectiveProgress = (rawProgress * efficiency) / 100;
-  
-  return Math.round(Math.min(100, effectiveProgress));
-};
-
-// Professional Progress Bar Component
-const ProfessionalProgressBar = ({ 
-  planned, 
-  actual, 
-  className = "",
-  showLabels = false 
-}: { 
-  planned: number; 
-  actual: number; 
-  className?: string;
-  showLabels?: boolean;
-}) => {
-  return (
-    <div className={`space-y-2 ${className}`}>
-      <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
-        <div 
-          className="absolute top-0 left-0 h-full bg-gradient-to-r from-amber-400 to-yellow-400 transition-all duration-500"
-          style={{ width: `${Math.min(planned, 100)}%` }}
-        />
-        <div 
-          className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-600 to-green-600 transition-all duration-500"
-          style={{ width: `${Math.min(actual, 100)}%` }}
-        />
-      </div>
-      
-      {showLabels && (
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-2 bg-gradient-to-r from-amber-400 to-yellow-400 rounded-sm border border-amber-500"></div>
-              <span className="text-gray-600">Planned ({planned}%)</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-2 bg-gradient-to-r from-blue-600 to-green-600 rounded-sm border border-blue-700"></div>
-              <span className="text-gray-600">Achieved ({actual}%)</span>
-            </div>
-          </div>
-          {planned !== actual && (
-            <span className={`font-medium ${actual > planned ? 'text-emerald-600' : 'text-red-600'}`}>
-              {actual > planned ? `+${actual - planned}%` : `${actual - planned}%`}
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Objective Card Component
-const ObjectiveCard = ({ 
-  objective, 
-  progress, 
-  isAdmin, 
-  onEdit, 
-  onDelete, 
-  onViewUpdates 
-}: {
-  objective: Objective;
-  progress: number;
-  isAdmin: boolean;
-  onEdit: (objective: Objective) => void;
-  onDelete: (id: string) => void;
-  onViewUpdates: (objectiveId: string, objectiveTitle: string) => void;
-}) => {
-  const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
-  const quarterInfo = getQuarterInfo(objective.target_completion_date);
-  
-  return (
-    <Card className="border border-gray-200 hover:shadow-md transition-shadow">
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h3 className="font-medium text-gray-900 truncate">{objective.title}</h3>
-              <p className="text-sm text-gray-600 mt-1 line-clamp-2">{objective.description}</p>
-            </div>
-            <div className="flex gap-2 flex-shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onViewUpdates(objective.id, objective.title)}
-                title="View updates for this objective"
-              >
-                <Eye className="h-4 w-4" />
-              </Button>
-              {isAdmin && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onEdit(objective)}
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 hover:text-red-700"
-                    onClick={() => onDelete(objective.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap gap-2 text-sm">
-            <Badge variant="outline" className="text-blue-600 border-blue-600">
-              {objective.weightage}% Weight
-            </Badge>
-            <Badge variant="secondary">
-              {objective.num_activities} activities
-            </Badge>
-            <Badge 
-              variant={progress >= 80 ? "default" : progress >= 50 ? "secondary" : "outline"}
-              className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
-            >
-              {progress}% Achieved
-            </Badge>
-            <Badge variant="outline" className="text-purple-600 border-purple-600">
-              <Calendar className="h-3 w-3 mr-1" />
-              {quarterInfo.quarter} {quarterInfo.year}
-            </Badge>
-          </div>
-
-          <div className="space-y-3">
-            <ProfessionalProgressBar 
-              planned={plannedProgress} 
-              actual={progress} 
-              showLabels={true}
-            />
-            
-            {plannedProgress !== progress && (
-              <div className="text-xs text-center">
-                {progress > plannedProgress ? (
-                  <span className="text-emerald-600 font-medium">✓ Ahead of schedule</span>
-                ) : (
-                  <span className="text-red-600 font-medium">⚠ Behind schedule</span>
-                )}
-              </div>
-            )}
-          </div>
-          
-          {isAdmin && (
-            <div className="text-xs text-gray-500 space-y-1">
-              <div>{objective.owner?.full_name || objective.owner?.email}</div>
-              <div>{objective.creator?.full_name || objective.creator?.email}</div>
-              <div>{new Date(objective.created_at).toLocaleDateString()}</div>
-            </div>
-          )}
-          
-          {!isAdmin && (
-            <div className="text-xs text-gray-500 space-y-1">
-              <div>{objective.creator?.full_name || objective.creator?.email}</div>
-              <div>{new Date(objective.created_at).toLocaleDateString()}</div>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
-// Main Component
 export const ObjectivesPage = () => {
   const { isAdmin, profile } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
   // State
-  const [objectives, setObjectives] = useState<Objective[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingObjective, setEditingObjective] = useState<Objective | null>(null);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
   const [selectedObjectiveUpdates, setSelectedObjectiveUpdates] = useState<any[]>([]);
   const [selectedObjectiveTitle, setSelectedObjectiveTitle] = useState("");
-  const [objectiveProgress, setObjectiveProgress] = useState<Record<string, number>>({});
   const [formData, setFormData] = useState<ObjectiveFormData>({
     title: "",
     description: "",
@@ -310,15 +43,19 @@ export const ObjectivesPage = () => {
   const userIdFromUrl = searchParams.get('userId');
   const [filteredUser, setFilteredUser] = useState<UserProfile | null>(null);
 
-  // Effects
-  useEffect(() => {
-    fetchObjectives();
-    if (isAdmin()) {
-      fetchUsers();
-    }
-  }, [isAdmin, profile, userIdFromUrl]);
+  // Use custom hook for data management
+  const {
+    objectives,
+    users,
+    loading,
+    objectiveProgress,
+    createObjective,
+    updateObjective,
+    deleteObjective,
+  } = useObjectivesData(userIdFromUrl);
 
   useEffect(() => {
+    // Find the filtered user details when userIdFromUrl changes
     if (userIdFromUrl && users.length > 0) {
       const user = users.find(u => u.id === userIdFromUrl);
       setFilteredUser(user || null);
@@ -326,99 +63,6 @@ export const ObjectivesPage = () => {
       setFilteredUser(null);
     }
   }, [userIdFromUrl, users]);
-
-  // Data fetching functions
-  const fetchObjectives = async () => {
-    try {
-      let query = supabase
-        .from('objectives')
-        .select(`
-          *,
-          owner:profiles!objectives_owner_id_fkey(full_name, email),
-          creator:profiles!objectives_created_by_fkey(full_name, email)
-        `)
-        .order('created_at', { ascending: false });
-
-      // Apply filtering based on user role and URL parameters
-      if (isAdmin()) {
-        if (userIdFromUrl) {
-          query = query.eq('owner_id', userIdFromUrl);
-        }
-      } else {
-        if (profile && profile.id) {
-          query = query.eq('owner_id', profile.id);
-        } else {
-          console.error("Error: Non-admin user profile or profile ID is missing. Cannot fetch objectives.");
-          setObjectives([]);
-          setLoading(false);
-          toast({
-            title: "Error",
-            description: "User profile not found. Cannot fetch objectives.",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setObjectives(data || []);
-      
-      if (data) {
-        await fetchObjectiveProgress(data);
-      }
-    } catch (error) {
-      console.error('Error fetching objectives:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch objectives",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchObjectiveProgress = async (objectives: Objective[]) => {
-    const progressMap: Record<string, number> = {};
-    
-    for (const objective of objectives) {
-      try {
-        const { data: updates } = await supabase
-          .from('objective_updates')
-          .select('achieved_count, efficiency, update_date')
-          .eq('objective_id', objective.id)
-          .order('update_date', { ascending: true });
-
-        if (updates && updates.length > 0) {
-          const progress = calculateCumulativeProgress(updates, objective.num_activities);
-          progressMap[objective.id] = progress;
-        } else {
-          progressMap[objective.id] = 0;
-        }
-      } catch (error) {
-        console.error(`Error fetching progress for objective ${objective.id}:`, error);
-        progressMap[objective.id] = 0;
-      }
-    }
-    
-    setObjectiveProgress(progressMap);
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .order('full_name');
-
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-    }
-  };
 
   // Event handlers
   const handleViewUpdates = async (objectiveId: string, objectiveTitle: string) => {
@@ -476,56 +120,15 @@ export const ObjectivesPage = () => {
       return;
     }
 
-    try {
-      const targetDate = getDateFromQuarter(formData.targetQuarter, 2025);
-      
-      const objectiveData = {
-        title: formData.title,
-        description: formData.description,
-        weightage: parseFloat(formData.weightage),
-        num_activities: parseInt(formData.numActivities),
-        owner_id: isAdmin() ? formData.ownerId : profile?.id,
-        created_by: profile?.id,
-        target_completion_date: targetDate,
-      };
-
-      if (editingObjective) {
-        const { error } = await supabase
-          .from('objectives')
-          .update(objectiveData)
-          .eq('id', editingObjective.id);
-
-        if (error) throw error;
-
-        toast({
-          title: "Success",
-          description: "Objective updated successfully",
-        });
-      } else {
-        const { error } = await supabase
-          .from('objectives')
-          .insert([objectiveData]);
-
-        if (error) throw error;
-
-        toast({
-          title: "Success",
-          description: "Objective created successfully",
-        });
-      }
-
-      setIsDialogOpen(false);
-      setEditingObjective(null);
-      setFormData({ title: "", description: "", weightage: "", numActivities: "", ownerId: "", targetQuarter: "Q4" });
-      fetchObjectives();
-    } catch (error) {
-      console.error('Error saving objective:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save objective",
-        variant: "destructive",
-      });
+    if (editingObjective) {
+      await updateObjective(editingObjective.id, formData);
+    } else {
+      await createObjective(formData);
     }
+
+    setIsDialogOpen(false);
+    setEditingObjective(null);
+    setFormData({ title: "", description: "", weightage: "", numActivities: "", ownerId: "", targetQuarter: "Q4" });
   };
 
   const handleEdit = (objective: Objective) => {
@@ -543,29 +146,7 @@ export const ObjectivesPage = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this objective?')) return;
-    
-    try {
-      const { error } = await supabase
-        .from('objectives')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Objective deleted successfully",
-      });
-      fetchObjectives();
-    } catch (error) {
-      console.error('Error deleting objective:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete objective",
-        variant: "destructive",
-      });
-    }
+    await deleteObjective(id);
   };
 
   const handleAddNew = () => {
@@ -629,124 +210,17 @@ export const ObjectivesPage = () => {
         
         {/* Add Objective Button */}
         {isAdmin() && (
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button 
-                onClick={handleAddNew}
-                className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Add Objective
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5 text-blue-600" />
-                  {editingObjective ? "Edit Objective" : "Add New Objective"}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingObjective ? "Update the objective details" : "Create a new HSE objective"}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Title</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                    placeholder="Enter objective title"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Enter objective description"
-                    rows={3}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="weightage">Weightage (%)</Label>
-                    <Input
-                      id="weightage"
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={formData.weightage}
-                      onChange={(e) => setFormData(prev => ({ ...prev, weightage: e.target.value }))}
-                      placeholder="25"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="numActivities">Number of Activities</Label>
-                    <Input
-                      id="numActivities"
-                      type="number"
-                      min="1"
-                      value={formData.numActivities}
-                      onChange={(e) => setFormData(prev => ({ ...prev, numActivities: e.target.value }))}
-                      placeholder="8"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="targetQuarter">Target Completion Quarter</Label>
-                  <Select 
-                    value={formData.targetQuarter} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, targetQuarter: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select target quarter" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {QUARTERS.map((quarter) => (
-                        <SelectItem key={quarter.value} value={quarter.value}>
-                          {quarter.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {isAdmin() && (
-                  <div className="space-y-2">
-                    <Label htmlFor="owner">Objective Owner</Label>
-                    <Select 
-                      value={formData.ownerId} 
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, ownerId: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select objective owner" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {users.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.full_name || user.email}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <div className="flex justify-end gap-3">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit">
-                    {editingObjective ? "Update" : "Create"}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <ObjectiveFormDialog
+            isOpen={isDialogOpen}
+            onOpenChange={setIsDialogOpen}
+            formData={formData}
+            setFormData={setFormData}
+            onSubmit={handleSubmit}
+            editingObjective={editingObjective}
+            users={users}
+            isAdmin={isAdmin()}
+            onAddNew={handleAddNew}
+          />
         )}
       </div>
 
@@ -775,100 +249,14 @@ export const ObjectivesPage = () => {
               </CardHeader>
               <CardContent>
                 {/* Desktop Table View */}
-                <div className="hidden lg:block">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Weightage</TableHead>
-                        <TableHead>Activities</TableHead>
-                        <TableHead>Progress</TableHead>
-                        <TableHead>Planned</TableHead>
-                        <TableHead>Target Date</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {ownerObjectives.map((objective) => {
-                        const progress = objectiveProgress[objective.id] || 0;
-                        const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
-                        const quarterInfo = getQuarterInfo(objective.target_completion_date);
-                        return (
-                          <TableRow key={objective.id}>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium">{objective.title}</div>
-                                <div className="text-sm text-gray-600 max-w-xs truncate">
-                                  {objective.description}
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-blue-600 border-blue-600">
-                                {objective.weightage}%
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary">
-                                {objective.num_activities} activities
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant={progress >= 80 ? "default" : "secondary"}
-                                className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
-                              >
-                                {progress}%
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge 
-                                variant="outline" 
-                                className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
-                              >
-                                <Clock className="h-3 w-3 mr-1" />
-                                {plannedProgress}%
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="text-purple-600 border-purple-600">
-                                <Calendar className="h-3 w-3 mr-1" />
-                                {quarterInfo.quarter} {quarterInfo.year}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleViewUpdates(objective.id, objective.title)}
-                                  title="View updates for this objective"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleEdit(objective)}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 hover:text-red-700"
-                                  onClick={() => handleDelete(objective.id)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                <ObjectiveTableView
+                  objectives={ownerObjectives}
+                  objectiveProgress={objectiveProgress}
+                  isAdmin={isAdmin()}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onViewUpdates={handleViewUpdates}
+                />
 
                 {/* Mobile Card View */}
                 <div className="lg:hidden space-y-4">
@@ -901,90 +289,14 @@ export const ObjectivesPage = () => {
           </CardHeader>
           <CardContent>
             {/* Desktop Table View */}
-            <div className="hidden lg:block">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Weightage</TableHead>
-                    <TableHead>Activities</TableHead>
-                    <TableHead>Progress</TableHead>
-                    <TableHead>Planned</TableHead>
-                    <TableHead>Target Date</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {objectives.map((objective) => {
-                    const progress = objectiveProgress[objective.id] || 0;
-                    const plannedProgress = calculatePlannedProgress(objective.target_completion_date);
-                    const quarterInfo = getQuarterInfo(objective.target_completion_date);
-                    return (
-                      <TableRow key={objective.id}>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{objective.title}</div>
-                            <div className="text-sm text-gray-600 max-w-xs truncate">
-                              {objective.description}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div className="font-medium">{objective.owner?.full_name || objective.owner?.email}</div>
-                            <div className="text-gray-600">{objective.owner?.email}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-blue-600 border-blue-600">
-                            {objective.weightage}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {objective.num_activities} activities
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={progress >= 80 ? "default" : "secondary"}
-                            className={progress >= 80 ? "bg-green-100 text-green-800" : progress >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}
-                          >
-                            {progress}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant="outline" 
-                            className={plannedProgress > progress ? "text-red-600 border-red-600" : "text-green-600 border-green-600"}
-                          >
-                            <Clock className="h-3 w-3 mr-1" />
-                            {plannedProgress}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-purple-600 border-purple-600">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            {quarterInfo.quarter} {quarterInfo.year}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleViewUpdates(objective.id, objective.title)}
-                            title="View updates for this objective"
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <ObjectiveTableView
+              objectives={objectives}
+              objectiveProgress={objectiveProgress}
+              isAdmin={isAdmin()}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onViewUpdates={handleViewUpdates}
+            />
 
             {/* Mobile Card View */}
             <div className="lg:hidden space-y-4">
