@@ -106,19 +106,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     try {
-      // Always attempt to sign out - signOut() handles local session clearing regardless
-      const { error } = await supabase.auth.signOut();
+      // Check if there's an active session before attempting to sign out
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
       
-      if (error) {
-        // Handle the specific 'session_not_found' case as informational
-        if (error.message?.includes('session_not_found') || 
-            error.message?.includes('Session from session_id claim in JWT does not exist') ||
-            (error as any).status === 403 ||
-            (error as any).code === 'session_not_found') {
-          console.info('Session already cleared on server:', error.message);
-        } else {
-          console.error('Logout error:', error);
+      if (currentSession) {
+        // Only attempt to sign out if there's an active session
+        const { error } = await supabase.auth.signOut();
+        
+        if (error) {
+          // Handle the specific 'session_not_found' case as informational
+          if (error.message?.includes('session_not_found') || 
+              error.message?.includes('Session from session_id claim in JWT does not exist') ||
+              (error as any).status === 403 ||
+              (error as any).code === 'session_not_found') {
+            console.info('Session already cleared on server:', error.message);
+          } else {
+            console.error('Logout error:', error);
+          }
         }
+      } else {
+        console.warn('No active session found. User might already be logged out.');
       }
       
       // Always clear the client-side state regardless of server response
