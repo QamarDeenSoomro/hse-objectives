@@ -6,137 +6,184 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Target } from "lucide-react";
-import { ObjectiveFormData, UserProfile } from "@/types/objectives";
-import { QUARTERS } from "@/utils/objectives";
+import { ActionItem, ActionItemFormData, PRIORITY_OPTIONS } from "@/types/actionItems";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
-interface ObjectiveFormDialogProps {
+interface ActionItemFormDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  formData: ObjectiveFormData;
-  setFormData: React.Dispatch<React.SetStateAction<ObjectiveFormData>>;
-  onSubmit: (e: React.FormEvent) => void;
-  editingObjective: any;
-  users: UserProfile[];
-  isAdmin: boolean;
-  onAddNew: () => void;
+  editingActionItem?: ActionItem | null;
 }
 
-export const ObjectiveFormDialog = ({
+export const ActionItemFormDialog = ({
   isOpen,
   onOpenChange,
-  formData,
-  setFormData,
-  onSubmit,
-  editingObjective,
-  users,
-  isAdmin,
-  onAddNew
-}: ObjectiveFormDialogProps) => {
+  editingActionItem
+}: ActionItemFormDialogProps) => {
+  const [formData, setFormData] = React.useState<ActionItemFormData>({
+    title: "",
+    description: "",
+    target_date: "",
+    priority: "medium",
+    assigned_to: "",
+    verifier_id: "",
+  });
+
+  // Fetch users for assignment
+  const { data: users = [] } = useQuery({
+    queryKey: ['users-for-assignment'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .order('full_name');
+
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  React.useEffect(() => {
+    if (editingActionItem) {
+      setFormData({
+        title: editingActionItem.title,
+        description: editingActionItem.description || "",
+        target_date: editingActionItem.target_date,
+        priority: editingActionItem.priority || "medium",
+        assigned_to: editingActionItem.assigned_to,
+        verifier_id: editingActionItem.verifier_id || "",
+      });
+    } else {
+      setFormData({
+        title: "",
+        description: "",
+        target_date: "",
+        priority: "medium",
+        assigned_to: "",
+        verifier_id: "",
+      });
+    }
+  }, [editingActionItem]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // This would be handled by the parent component
+    onOpenChange(false);
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button 
-          onClick={onAddNew}
-          className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Objective
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-blue-600" />
-            {editingObjective ? "Edit Objective" : "Add New Objective"}
+            {editingActionItem ? "Edit Action Item" : "Create New Action Item"}
           </DialogTitle>
           <DialogDescription>
-            {editingObjective ? "Update the objective details" : "Create a new HSE objective"}
+            {editingActionItem 
+              ? "Update the action item details" 
+              : "Create a new action item with assignment and verification workflow"
+            }
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={onSubmit} className="space-y-4">
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="title">Title *</Label>
             <Input
               id="title"
               value={formData.title}
               onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              placeholder="Enter objective title"
+              placeholder="Enter action item title"
+              required
             />
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
               value={formData.description}
               onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Enter objective description"
+              placeholder="Enter detailed description of the action item"
               rows={3}
             />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="weightage">Weightage (%)</Label>
+              <Label htmlFor="target_date">Target Date *</Label>
               <Input
-                id="weightage"
-                type="number"
-                min="1"
-                max="100"
-                value={formData.weightage}
-                onChange={(e) => setFormData(prev => ({ ...prev, weightage: e.target.value }))}
-                placeholder="25"
+                id="target_date"
+                type="date"
+                value={formData.target_date}
+                onChange={(e) => setFormData(prev => ({ ...prev, target_date: e.target.value }))}
+                min={new Date().toISOString().split('T')[0]}
+                required
               />
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="numActivities">Number of Activities</Label>
-              <Input
-                id="numActivities"
-                type="number"
-                min="1"
-                value={formData.numActivities}
-                onChange={(e) => setFormData(prev => ({ ...prev, numActivities: e.target.value }))}
-                placeholder="8"
-              />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="targetQuarter">Target Completion Quarter</Label>
-            <Select 
-              value={formData.targetQuarter} 
-              onValueChange={(value) => setFormData(prev => ({ ...prev, targetQuarter: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select target quarter" />
-              </SelectTrigger>
-              <SelectContent>
-                {QUARTERS.map((quarter) => (
-                  <SelectItem key={quarter.value} value={quarter.value}>
-                    {quarter.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {isAdmin && (
-            <div className="space-y-2">
-              <Label htmlFor="owner">Objective Owner</Label>
+              <Label htmlFor="priority">Priority</Label>
               <Select 
-                value={formData.ownerId} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, ownerId: value }))}
+                value={formData.priority} 
+                onValueChange={(value: any) => setFormData(prev => ({ ...prev, priority: value }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select objective owner" />
+                  <SelectValue placeholder="Select priority" />
                 </SelectTrigger>
                 <SelectContent>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.full_name || user.email}
+                  {PRIORITY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-          )}
-          <div className="flex justify-end gap-3">
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="assigned_to">Assign To *</Label>
+            <Select 
+              value={formData.assigned_to} 
+              onValueChange={(value) => setFormData(prev => ({ ...prev, assigned_to: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select person responsible" />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.full_name || user.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="verifier_id">Verifier (Optional)</Label>
+            <Select 
+              value={formData.verifier_id} 
+              onValueChange={(value) => setFormData(prev => ({ ...prev, verifier_id: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select person responsible for verification" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">No verifier required</SelectItem>
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.full_name || user.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
             <Button 
               type="button" 
               variant="outline" 
@@ -145,7 +192,7 @@ export const ObjectiveFormDialog = ({
               Cancel
             </Button>
             <Button type="submit">
-              {editingObjective ? "Update" : "Create"}
+              {editingActionItem ? 'Update' : 'Create'}
             </Button>
           </div>
         </form>
