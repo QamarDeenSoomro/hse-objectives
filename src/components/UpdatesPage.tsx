@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ import { UpdatesTable } from "@/components/updates/UpdatesTable";
 import { TeamUpdatesView } from "@/components/updates/TeamUpdatesView";
 
 export const UpdatesPage = () => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, profile } = useAuth();
   const { userObjectives, updates, isLoading, createUpdate, isCreating, updateUpdate, isUpdating, deleteUpdate, isDeleting } = useUpdatesData();
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -24,7 +23,7 @@ export const UpdatesPage = () => {
   const [editingUpdate, setEditingUpdate] = useState<any>(null);
 
   // Filter updates based on user role
-  const myUpdates = updates.filter(update => update.user_id === useAuth().profile?.id);
+  const myUpdates = updates.filter(update => update.user_id === profile?.id);
   const allUpdates = updates;
 
   // Group team updates by user and then by objective
