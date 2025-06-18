@@ -114,7 +114,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (error.message?.includes('session_not_found') || error.message?.includes('Session from session_id claim in JWT does not exist')) {
           console.info('Session already cleared on server:', error.message);
         } else {
-          console.warn('Logout error:', error);
+          console.error('Logout error:', error);
         }
       }
       
@@ -123,8 +123,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       setProfile(null);
     } catch (error) {
-      // Handle any unexpected errors and clear state
-      console.error('Logout error:', error);
+      // Handle any unexpected errors - check for session-related errors first
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('session_not_found') || errorMessage.includes('Session from session_id claim in JWT does not exist')) {
+        console.info('Session already cleared on server:', errorMessage);
+      } else {
+        console.error('Logout error:', error);
+      }
+      
+      // Always clear the client-side state regardless of error
       setSession(null);
       setUser(null);
       setProfile(null);
