@@ -10,11 +10,18 @@ import { ActionItemFormDialog } from "./ActionItemFormDialog";
 import { ActionItemCard } from "./ActionItemCard";
 import { ActionItemClosureDialog } from "./ActionItemClosureDialog";
 import { ActionItemVerificationDialog } from "./ActionItemVerificationDialog";
-import { ActionItem } from "@/types/actionItems";
+import { ActionItem, ActionItemFormData } from "@/types/actionItems";
 
 export const ActionItemsPage = () => {
   const { isAdmin, profile } = useAuth();
-  const { actionItems, isLoading } = useActionItems();
+  const { 
+    actionItems, 
+    isLoading, 
+    createActionItem, 
+    isCreating, 
+    updateActionItem, 
+    isUpdating 
+  } = useActionItems();
   
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
   const [isClosureDialogOpen, setIsClosureDialogOpen] = useState(false);
@@ -49,6 +56,15 @@ export const ActionItemsPage = () => {
   const handleVerify = (actionItem: ActionItem) => {
     setSelectedActionItem(actionItem);
     setIsVerificationDialogOpen(true);
+  };
+
+  const handleFormSubmit = (formData: ActionItemFormData) => {
+    if (editingActionItem) {
+      updateActionItem({ id: editingActionItem.id, formData });
+    } else {
+      createActionItem(formData);
+    }
+    setIsFormDialogOpen(false);
   };
 
   if (isLoading) {
@@ -282,6 +298,8 @@ export const ActionItemsPage = () => {
         isOpen={isFormDialogOpen}
         onOpenChange={setIsFormDialogOpen}
         editingActionItem={editingActionItem}
+        onSubmit={handleFormSubmit}
+        isSubmitting={isCreating || isUpdating}
       />
 
       <ActionItemClosureDialog

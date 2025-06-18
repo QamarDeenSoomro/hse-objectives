@@ -1,11 +1,11 @@
 import React from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Target } from "lucide-react";
+import { Target } from "lucide-react";
 import { ActionItem, ActionItemFormData, PRIORITY_OPTIONS } from "@/types/actionItems";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,12 +14,16 @@ interface ActionItemFormDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   editingActionItem?: ActionItem | null;
+  onSubmit: (formData: ActionItemFormData) => void;
+  isSubmitting: boolean;
 }
 
 export const ActionItemFormDialog = ({
   isOpen,
   onOpenChange,
-  editingActionItem
+  editingActionItem,
+  onSubmit,
+  isSubmitting
 }: ActionItemFormDialogProps) => {
   const [formData, setFormData] = React.useState<ActionItemFormData>({
     title: "",
@@ -68,19 +72,7 @@ export const ActionItemFormDialog = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // This would be handled by the parent component
-    onOpenChange(false);
-  };
-
-  const handleVerifierChange = (value: string) => {
-    // Map the placeholder value back to empty string
-    const verifierId = value === "no-verifier-selected" ? "" : value;
-    setFormData(prev => ({ ...prev, verifier_id: verifierId }));
-  };
-
-  // Get the display value for the verifier select
-  const getVerifierDisplayValue = () => {
-    return formData.verifier_id === "" ? "no-verifier-selected" : formData.verifier_id;
+    onSubmit(formData);
   };
 
   return (
@@ -177,8 +169,11 @@ export const ActionItemFormDialog = ({
           <div className="space-y-2">
             <Label htmlFor="verifier_id">Verifier (Optional)</Label>
             <Select 
-              value={getVerifierDisplayValue()} 
-              onValueChange={handleVerifierChange}
+              value={formData.verifier_id || "no-verifier-selected"} 
+              onValueChange={(value) => setFormData(prev => ({ 
+                ...prev, 
+                verifier_id: value === "no-verifier-selected" ? "" : value 
+              }))}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select person responsible for verification" />
@@ -202,8 +197,14 @@ export const ActionItemFormDialog = ({
             >
               Cancel
             </Button>
-            <Button type="submit">
-              {editingActionItem ? 'Update' : 'Create'}
+            <Button 
+              type="submit" 
+              disabled={isSubmitting || !formData.title || !formData.target_date || !formData.assigned_to}
+            >
+              {isSubmitting 
+                ? (editingActionItem ? 'Updating...' : 'Creating...') 
+                : (editingActionItem ? 'Update' : 'Create')
+              }
             </Button>
           </div>
         </form>
