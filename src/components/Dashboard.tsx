@@ -9,6 +9,24 @@ interface DashboardProps {
   onNavigateToObjectives?: () => void;
 }
 
+// Custom Progress Bar Component with Professional Colors
+const CustomProgressBar = ({ planned, actual, className = "" }: { planned: number, actual: number, className?: string }) => {
+  return (
+    <div className={`relative w-full h-2 bg-gray-200 rounded-full overflow-hidden ${className}`}>
+      {/* Planned Progress (Green) */}
+      <div 
+        className="absolute top-0 left-0 h-full bg-green-500 transition-all duration-300"
+        style={{ width: `${Math.min(planned, 100)}%` }}
+      />
+      {/* Actual Progress (Yellow/Amber) */}
+      <div 
+        className="absolute top-0 left-0 h-full bg-amber-400 transition-all duration-300"
+        style={{ width: `${Math.min(actual, 100)}%` }}
+      />
+    </div>
+  );
+};
+
 export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
   const { stats, teamData, groupedObjectiveStatuses, isLoading, isAdmin } = useDashboardData();
   const navigate = useNavigate();
@@ -145,9 +163,19 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
                         </Badge>
                       </div>
                     </div>
-                    <Progress value={member.completion} className="h-2" />
-                    <div className="text-xs text-gray-500">
-                      Last update: {new Date(member.lastUpdate).toLocaleDateString()}
+                    <CustomProgressBar planned={100} actual={member.completion} />
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>Last update: {new Date(member.lastUpdate).toLocaleDateString()}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-2 bg-green-500 rounded-sm"></div>
+                          <span>Planned</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-2 bg-amber-400 rounded-sm"></div>
+                          <span>Achieved</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -175,20 +203,19 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6"> {/* Increased spacing for groups */}
+            <div className="space-y-6">
               {Object.keys(groupedObjectiveStatuses).length > 0 ? (
                 Object.entries(groupedObjectiveStatuses).map(([ownerName, objectives]) => (
                   <div key={ownerName} className="space-y-3">
-                    <h3 className="text-md font-semibold text-gray-800">{ownerName}</h3> {/* Owner heading */}
+                    <h3 className="text-md font-semibold text-gray-800">{ownerName}</h3>
                     {objectives.map((objective) => (
-                      <div key={objective.id} className="space-y-2 pl-2 border-l-2 border-gray-200"> {/* Indent objectives under owner, use objective.id */}
+                      <div key={objective.id} className="space-y-2 pl-2 border-l-2 border-gray-200">
                         <div className="flex flex-col gap-2">
                           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <span className="font-medium text-gray-900 text-sm md:text-base block truncate">
                                 {objective.title}
                               </span>
-                              {/* Owner name is now a group heading, no need to repeat if isAdmin */}
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <span className="text-xs md:text-sm text-gray-600">
@@ -200,7 +227,7 @@ export const Dashboard = ({ onNavigateToObjectives }: DashboardProps) => {
                             </div>
                           </div>
                         </div>
-                        <Progress value={objective.completion} className="h-2" />
+                        <CustomProgressBar planned={100} actual={objective.completion} />
                       </div>
                     ))}
                   </div>
