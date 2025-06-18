@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,7 +45,7 @@ export const useUpdatesData = () => {
         .from('objective_updates')
         .select(`
           *,
-          objective:objectives!objective_id(title, num_activities),
+          objective:objectives!objective_id(title, num_activities, target_completion_date),
           user:profiles!user_id(full_name, email)
         `)
         .order('update_date', { ascending: false });
@@ -59,10 +58,48 @@ export const useUpdatesData = () => {
     enabled: !!profile,
   });
 
+  // Helper function to check if updates are allowed for an objective
+  const checkUpdateDeadline = async (objectiveId: string): Promise<boolean> => {
+    try {
+      const { data: objective, error } = await supabase
+        .from('objectives')
+        .select('target_completion_date')
+        .eq('id', objectiveId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching objective deadline:', error);
+        return false;
+      }
+
+      if (!objective?.target_completion_date) {
+        return true; // Allow if no deadline is set
+      }
+
+      const targetDate = new Date(objective.target_completion_date);
+      const currentDate = new Date();
+      
+      // Set time to end of day for target date to allow updates on the target date
+      targetDate.setHours(23, 59, 59, 999);
+
+      return currentDate <= targetDate;
+    } catch (error) {
+      console.error('Error checking update deadline:', error);
+      return false;
+    }
+  };
+
   // Create update mutation
   const createUpdateMutation = useMutation({
     mutationFn: async (formData: UpdateFormData) => {
       console.log('Creating update with data:', formData);
+      
+      // Check if updates are allowed for this objective
+      const isUpdateAllowed = await checkUpdateDeadline(formData.objectiveId);
+      
+      if (!isUpdateAllowed) {
+        throw new Error('Updates are no longer allowed for this objective as the target completion date has passed.');
+      }
       
       // Upload photos first if any
       let photoUrls: string[] = [];
@@ -120,11 +157,21 @@ export const useUpdatesData = () => {
     },
     onError: (error) => {
       console.error('Update mutation error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add update",
-        variant: "destructive",
-      });
+      
+      // Check if it's a deadline-related error
+      if (error.message.includes('target completion date has passed')) {
+        toast({
+          title: "Update Not Allowed",
+          description: "The deadline for this objective has passed. Updates are no longer permitted.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to add update",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -132,6 +179,25 @@ export const useUpdatesData = () => {
   const updateUpdateMutation = useMutation({
     mutationFn: async (formData: EditUpdateData) => {
       console.log('Updating update with data:', formData);
+      
+      // First, get the objective_id from the update being edited
+      const { data: existingUpdate, error: fetchError } = await supabase
+        .from('objective_updates')
+        .select('objective_id')
+        .eq('id', formData.id)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching existing update:', fetchError);
+        throw new Error('Failed to fetch update details');
+      }
+
+      // Check if updates are allowed for this objective
+      const isUpdateAllowed = await checkUpdateDeadline(existingUpdate.objective_id);
+      
+      if (!isUpdateAllowed) {
+        throw new Error('Updates are no longer allowed for this objective as the target completion date has passed.');
+      }
       
       // Upload new photos if any
       let photoUrls: string[] = [];
@@ -196,11 +262,21 @@ export const useUpdatesData = () => {
     },
     onError: (error) => {
       console.error('Update edit mutation error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to modify update",
-        variant: "destructive",
-      });
+      
+      // Check if it's a deadline-related error
+      if (error.message.includes('target completion date has passed')) {
+        toast({
+          title: "Update Not Allowed",
+          description: "The deadline for this objective has passed. Updates are no longer permitted.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to modify update",
+          variant: "destructive",
+        });
+      }
     },
   });
 
@@ -244,5 +320,6 @@ export const useUpdatesData = () => {
     isUpdating: updateUpdateMutation.isPending,
     deleteUpdate: deleteUpdateMutation.mutate,
     isDeleting: deleteUpdateMutation.isPending,
+    checkUpdateDeadline, // Export the helper function for use in components
   };
 };
