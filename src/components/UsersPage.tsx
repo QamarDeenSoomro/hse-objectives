@@ -18,7 +18,7 @@ interface UserData {
   full_name: string | null;
   role: "admin" | "user" | "superadmin";
   created_at: string;
-  banned_until?: string;
+  banned_until?: string | null;
 }
 
 export const UsersPage = () => {
@@ -44,12 +44,14 @@ export const UsersPage = () => {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error }  = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+      
+      console.log("Fetched users:", data);
       setUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -246,6 +248,11 @@ export const UsersPage = () => {
     }
   };
 
+  const isUserDisabled = (user: UserData) => {
+    if (!user.banned_until) return false;
+    return new Date(user.banned_until) > new Date();
+  };
+
   const toggleUserStatus = async (userId: string, isCurrentlyDisabled: boolean) => {
     try {
       setLoading(true);
@@ -286,6 +293,9 @@ export const UsersPage = () => {
         title: "Success",
         description: `User ${isCurrentlyDisabled ? 'enabled' : 'disabled'} successfully`,
       });
+      
+      // Refresh the user list to get updated data
+      fetchUsers();
     } catch (error: any) {
       console.error('Error toggling user status:', error);
       toast({
@@ -362,10 +372,6 @@ export const UsersPage = () => {
       // Regular admins can only toggle between user and admin
       return currentRole === "admin" ? "Demote to User" : "Promote to Admin";
     }
-  };
-
-  const isUserDisabled = (user: UserData) => {
-    return user.banned_until && new Date(user.banned_until) > new Date();
   };
 
   const UserCard = ({ user }: { user: UserData }) => {
