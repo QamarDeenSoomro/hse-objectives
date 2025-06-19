@@ -248,22 +248,36 @@ export const UsersPage = () => {
 
   const toggleUserStatus = async (userId: string, isCurrentlyDisabled: boolean) => {
     try {
-      // If user is currently disabled, enable them (set banned_until to null)
-      // If user is currently enabled, disable them (set banned_until to far future)
-      const bannedUntil = isCurrentlyDisabled ? null : new Date(Date.now() + 876000 * 60 * 60 * 1000).toISOString();
+      setLoading(true);
       
-      const { error } = await supabase
-        .from('profiles')
-        .update({ banned_until: bannedUntil })
-        .eq('id', userId);
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('No active session');
+      }
+      
+      // Call the Edge Function to toggle user status
+      const { data, error } = await supabase.functions.invoke('toggle-user-status', {
+        body: {
+          userId,
+          disable: !isCurrentlyDisabled
+        }
+      });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(error.message || 'Failed to toggle user status');
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
       // Update local state to reflect the change immediately
       setUsers(prevUsers => 
         prevUsers.map(user => 
           user.id === userId 
-            ? { ...user, banned_until: bannedUntil || undefined }
+            ? { ...user, banned_until: data.banned_until }
             : user
         )
       );
@@ -272,13 +286,15 @@ export const UsersPage = () => {
         title: "Success",
         description: `User ${isCurrentlyDisabled ? 'enabled' : 'disabled'} successfully`,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error toggling user status:', error);
       toast({
         title: "Error",
-        description: "Failed to update user status",
+        description: error.message || "Failed to update user status",
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 
