@@ -49,7 +49,7 @@ interface UserData {
   full_name: string | null;
   role: "admin" | "user" | "superadmin";
   created_at: string;
-  banned_until?: string | null;
+  banned_until?: string;
 }
 
 export const SuperAdminPage = () => {
@@ -59,6 +59,7 @@ export const SuperAdminPage = () => {
   const [componentPermissions, setComponentPermissions] = useState<ComponentPermission[]>([]);
   const [users, setUsers] = useState<UserData[]>([]);
   const [newSetting, setNewSetting] = useState({ key: "", value: "", description: "" });
+  const [togglingUsers, setTogglingUsers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Only load data when auth is complete and user is confirmed superadmin
@@ -206,39 +207,44 @@ export const SuperAdminPage = () => {
     }
   };
 
-  const toggleUserStatus = async (userId: string, isCurrentlyDisabled: boolean) => {
+  const toggleUserStatus = async (userId: string, currentlyBanned: boolean) => {
+    setTogglingUsers(prev => new Set(prev).add(userId));
+    
     try {
+      const action = currentlyBanned ? 'enable' : 'disable';
+      
       const { data, error } = await supabase.functions.invoke('toggle-user-status', {
         body: {
           userId,
-          disable: !isCurrentlyDisabled
+          action
         }
       });
 
       if (error) {
         const errorMessage = error.details || error.message || 'Unknown error occurred';
-        throw new Error(`Failed to toggle user status: ${errorMessage}`);
+        throw new Error(`Failed to ${action} user: ${errorMessage}`);
       }
 
       toast({
         title: "Success",
-        description: `User ${isCurrentlyDisabled ? 'enabled' : 'disabled'} successfully`,
+        description: `User ${action}d successfully`,
       });
 
       await loadUsers();
     } catch (error) {
-      console.error('Error toggling user status:', error);
+      console.error(`Error toggling user status:`, error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to toggle user status",
+        description: error instanceof Error ? error.message : `Failed to toggle user status`,
         variant: "destructive",
       });
+    } finally {
+      setTogglingUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
     }
-  };
-
-  const isUserDisabled = (user: UserData) => {
-    if (!user.banned_until) return false;
-    return new Date(user.banned_until) > new Date();
   };
 
   const manageUser = async (action: string, userId: string, userData?: any) => {
@@ -556,7 +562,8 @@ export const SuperAdminPage = () => {
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => {
-                    const userIsDisabled = isUserDisabled(user);
+                    const isBanned = user.banned_until && new Date(user.banned_until) > new Date();
+                    const isToggling = togglingUsers.has(user.id);
                     
                     return (
                       <TableRow key={user.id}>
@@ -582,7 +589,7 @@ export const SuperAdminPage = () => {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          {userIsDisabled ? (
+                          {isBanned ? (
                             <Badge variant="destructive">
                               <XCircle className="h-3 w-3 mr-1" />
                               Disabled
@@ -602,26 +609,25 @@ export const SuperAdminPage = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => toggleUserStatus(user.id, userIsDisabled)}
-                              className={userIsDisabled ? "text-green-600" : "text-orange-600"}
+                              onClick={() => toggleUserStatus(user.id, isBanned)}
+                              disabled={isToggling}
+                              className={isBanned ? "text-green-600 hover:text-green-700" : "text-red-600 hover:text-red-700"}
                             >
-                              {userIsDisabled ? (
-                                <>
-                                  <UserCheck className="h-4 w-4 mr-1" />
-                                  Enable
-                                </>
+                              {isToggling ? (
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
+                              ) : isBanned ? (
+                                <UserCheck className="h-4 w-4 mr-1" />
                               ) : (
-                                <>
-                                  <UserX className="h-4 w-4 mr-1" />
-                                  Disable
-                                </>
+                                <UserX className="h-4 w-4 mr-1" />
                               )}
+                              {isBanned ? 'Enable' : 'Disable'}
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               className="text-red-600 hover:text-red-700"
                               onClick={() => manageUser('delete', user.id)}
+                              disabled={user.role === "superadmin"}
                             >
                               Delete
                             </Button>

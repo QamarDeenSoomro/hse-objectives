@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +13,6 @@ serve(async (req) => {
   }
 
   try {
-    // Create Supabase client with service role key for admin operations
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -25,99 +24,103 @@ serve(async (req) => {
       }
     );
 
-    // Get the authorization header to verify the requesting user is authenticated
+    // Get the authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      throw new Error('Missing authorization header');
+      throw new Error('No authorization header');
     }
 
     // Verify the user is authenticated and get their info
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     
-    if (userError || !user) {
-      throw new Error('Invalid auth token');
+    if (authError || !user) {
+      throw new Error('Invalid token');
     }
 
-    // Check if the user is an admin
+    // Check if the user is an admin or superadmin
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (profileError) {
-      throw new Error('Error fetching user profile');
+    if (profileError || !['admin', 'superadmin'].includes(profile?.role)) {
+      throw new Error('Unauthorized: Admin access required');
     }
 
-    if (profile?.role !== 'admin' && profile?.role !== 'superadmin') {
-      throw new Error('Insufficient permissions');
+    // Get the request body
+    const { userId, action } = await req.json();
+
+    if (!userId || !action) {
+      throw new Error('Missing userId or action');
     }
 
-    // Parse the request body
-    const { userId, disable } = await req.json();
+    let result;
 
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
+    if (action === 'enable') {
+      // Enable user by removing ban
+      const { error: enableError } = await supabaseAdmin.auth.admin.updateUserById(
+        userId,
+        { ban_duration: 'none' }
+      );
+      if (enableError) throw enableError;
 
-    // Check if the target user is a superadmin (only superadmins can disable other superadmins)
-    const { data: targetProfile, error: targetProfileError } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', userId)
-      .single();
+      // Update profile to remove banned_until
+      const { error: profileUpdateError } = await supabaseAdmin
+        .from('profiles')
+        .update({ banned_until: null })
+        .eq('id', userId);
 
-    if (targetProfileError) {
-      throw new Error('Error fetching target user profile');
-    }
+      if (profileUpdateError) {
+        console.warn('Could not update profile banned_until:', profileUpdateError);
+      }
 
-    if (targetProfile?.role === 'superadmin' && profile?.role !== 'superadmin') {
-      throw new Error('Only superadmins can disable other superadmins');
-    }
+      result = { success: true, message: 'User enabled successfully' };
 
-    // Set the ban duration (null for enable, 100 years for disable)
-    const banDuration = disable ? '876000h' : 'none';
+    } else if (action === 'disable') {
+      // Disable user by setting a long ban duration
+      const { error: disableError } = await supabaseAdmin.auth.admin.updateUserById(
+        userId,
+        { ban_duration: '876000h' } // ~100 years
+      );
+      if (disableError) throw disableError;
 
-    // Update the user's ban status using the admin API
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      userId,
-      { ban_duration: banDuration }
-    );
+      // Update profile to set banned_until
+      const futureDate = new Date();
+      futureDate.setFullYear(futureDate.getFullYear() + 100);
+      
+      const { error: profileUpdateError } = await supabaseAdmin
+        .from('profiles')
+        .update({ banned_until: futureDate.toISOString() })
+        .eq('id', userId);
 
-    if (updateError) {
-      throw updateError;
-    }
+      if (profileUpdateError) {
+        console.warn('Could not update profile banned_until:', profileUpdateError);
+      }
 
-    // Also update the banned_until field in the profiles table for UI consistency
-    const bannedUntil = disable 
-      ? new Date(Date.now() + 876000 * 60 * 60 * 1000).toISOString() 
-      : null;
+      result = { success: true, message: 'User disabled successfully' };
 
-    const { error: profileUpdateError } = await supabaseAdmin
-      .from('profiles')
-      .update({ banned_until: bannedUntil })
-      .eq('id', userId);
-
-    if (profileUpdateError) {
-      console.warn('Profile update error:', profileUpdateError);
-      // Continue even if this fails, as the auth ban is the important part
+    } else {
+      throw new Error('Invalid action. Use "enable" or "disable"');
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: `User ${disable ? 'disabled' : 'enabled'} successfully`,
-        banned_until: bannedUntil
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify(result),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      },
     );
 
   } catch (error) {
-    console.error('Error in toggle-user-status function:', error);
+    console.error('Error in toggle-user-status:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Internal server error' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: error.message }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      },
     );
   }
 });
