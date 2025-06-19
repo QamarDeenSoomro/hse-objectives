@@ -205,7 +205,7 @@ export const ObjectivesPage = () => {
               <p className="text-gray-600 mt-1 text-sm md:text-base">
                 {userIdFromUrl && filteredUser
                   ? `Viewing objectives assigned to ${filteredUser.full_name || filteredUser.email}`
-                  : "Manage HSE objectives and track progress."
+                  : "Manage OHIH objectives and track progress."
                 }
               </p>
             </div>
