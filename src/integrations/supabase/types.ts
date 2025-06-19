@@ -9,6 +9,160 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      action_item_closures: {
+        Row: {
+          action_item_id: string
+          closed_by: string
+          closure_text: string
+          created_at: string
+          id: string
+          media_urls: string[] | null
+        }
+        Insert: {
+          action_item_id: string
+          closed_by: string
+          closure_text: string
+          created_at?: string
+          id?: string
+          media_urls?: string[] | null
+        }
+        Update: {
+          action_item_id?: string
+          closed_by?: string
+          closure_text?: string
+          created_at?: string
+          id?: string
+          media_urls?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_item_closures_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_item_closures_closed_by_fkey"
+            columns: ["closed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      action_item_verifications: {
+        Row: {
+          action_item_id: string
+          created_at: string
+          id: string
+          verification_comments: string | null
+          verification_status: Database["public"]["Enums"]["verification_status"]
+          verified_by: string
+        }
+        Insert: {
+          action_item_id: string
+          created_at?: string
+          id?: string
+          verification_comments?: string | null
+          verification_status: Database["public"]["Enums"]["verification_status"]
+          verified_by: string
+        }
+        Update: {
+          action_item_id?: string
+          created_at?: string
+          id?: string
+          verification_comments?: string | null
+          verification_status?: Database["public"]["Enums"]["verification_status"]
+          verified_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_item_verifications_action_item_id_fkey"
+            columns: ["action_item_id"]
+            isOneToOne: false
+            referencedRelation: "action_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_item_verifications_verified_by_fkey"
+            columns: ["verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      action_items: {
+        Row: {
+          assigned_to: string
+          closed_at: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          priority: Database["public"]["Enums"]["action_item_priority"]
+          status: Database["public"]["Enums"]["action_item_status"]
+          target_date: string
+          title: string
+          updated_at: string
+          verified_at: string | null
+          verifier_id: string | null
+        }
+        Insert: {
+          assigned_to: string
+          closed_at?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["action_item_priority"]
+          status?: Database["public"]["Enums"]["action_item_status"]
+          target_date: string
+          title: string
+          updated_at?: string
+          verified_at?: string | null
+          verifier_id?: string | null
+        }
+        Update: {
+          assigned_to?: string
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          priority?: Database["public"]["Enums"]["action_item_priority"]
+          status?: Database["public"]["Enums"]["action_item_status"]
+          target_date?: string
+          title?: string
+          updated_at?: string
+          verified_at?: string | null
+          verifier_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_items_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "action_items_verifier_id_fkey"
+            columns: ["verifier_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       component_permissions: {
         Row: {
           component_name: string
@@ -104,6 +258,7 @@ export type Database = {
       objective_updates: {
         Row: {
           achieved_count: number
+          comments: string | null
           created_at: string
           efficiency: number | null
           id: string
@@ -114,6 +269,7 @@ export type Database = {
         }
         Insert: {
           achieved_count?: number
+          comments?: string | null
           created_at?: string
           efficiency?: number | null
           id?: string
@@ -124,6 +280,7 @@ export type Database = {
         }
         Update: {
           achieved_count?: number
+          comments?: string | null
           created_at?: string
           efficiency?: number | null
           id?: string
@@ -205,6 +362,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          banned_until: string | null
           created_at: string
           email: string
           full_name: string | null
@@ -213,6 +371,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          banned_until?: string | null
           created_at?: string
           email: string
           full_name?: string | null
@@ -221,6 +380,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          banned_until?: string | null
           created_at?: string
           email?: string
           full_name?: string | null
@@ -311,9 +471,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_has_role: {
+        Args: {
+          user_id: string
+          check_role: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      action_item_priority: "low" | "medium" | "high" | "critical"
+      action_item_status: "open" | "closed" | "pending_verification" | "verified"
       app_role: "admin" | "user" | "superadmin"
+      verification_status: "approved" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -430,6 +600,9 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "user", "superadmin"],
+      action_item_priority: ["low", "medium", "high", "critical"],
+      action_item_status: ["open", "closed", "pending_verification", "verified"],
+      verification_status: ["approved", "rejected"],
     },
   },
 } as const

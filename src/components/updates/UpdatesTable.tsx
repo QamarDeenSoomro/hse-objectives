@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Edit, CheckSquare, Camera, Eye, Trash2, ExternalLink } from "lucide-react";
+import { Edit, CheckSquare, Camera, Eye, Trash2, ExternalLink, MessageSquare } from "lucide-react";
 
 interface UpdatesTableProps {
   updates: any[];
@@ -178,6 +178,19 @@ export const UpdatesTable = ({
               </div>
             </div>
 
+            {/* Comments Section */}
+            {update.comments && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-gray-500" />
+                  <span className="text-sm font-medium text-gray-700">Comments</span>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{update.comments}</p>
+                </div>
+              </div>
+            )}
+
             {/* Photos Section - Inline Display */}
             {update.photos && update.photos.length > 0 && (
               <div className="space-y-3">
@@ -228,6 +241,7 @@ export const UpdatesTable = ({
               <TableHead>Efficiency</TableHead>
               <TableHead>Effective Progress</TableHead>
               <TableHead>Date</TableHead>
+              <TableHead>Comments</TableHead>
               <TableHead>Photos</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -280,6 +294,16 @@ export const UpdatesTable = ({
                   </TableCell>
                   <TableCell className="text-sm text-gray-600">
                     {new Date(update.update_date).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    {update.comments ? (
+                      <div className="max-w-[150px] truncate" title={update.comments}>
+                        <MessageSquare className="h-3 w-3 inline mr-1 text-gray-500" />
+                        {update.comments}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">No comments</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {update.photos && update.photos.length > 0 ? (
