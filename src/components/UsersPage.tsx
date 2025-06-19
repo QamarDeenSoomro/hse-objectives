@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Edit, Trash2, Users, Shield, User, Key } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Shield, User, Key, UserCheck, UserX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface UserData {
@@ -18,6 +18,7 @@ interface UserData {
   full_name: string | null;
   role: "admin" | "user" | "superadmin";
   created_at: string;
+  banned_until?: string;
 }
 
 export const UsersPage = () => {
@@ -245,6 +246,42 @@ export const UsersPage = () => {
     }
   };
 
+  const toggleUserStatus = async (userId: string, isCurrentlyDisabled: boolean) => {
+    try {
+      // If user is currently disabled, enable them (remove ban)
+      // If user is currently enabled, disable them (add ban)
+      const banDuration = isCurrentlyDisabled ? null : '876000h'; // ~100 years for disable
+      
+      const { error } = await supabase.auth.admin.updateUserById(
+        userId,
+        { ban_duration: banDuration }
+      );
+
+      if (error) throw error;
+
+      // Update local state to reflect the change
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userId 
+            ? { ...user, banned_until: isCurrentlyDisabled ? undefined : new Date(Date.now() + 876000 * 60 * 60 * 1000).toISOString() }
+            : user
+        )
+      );
+
+      toast({
+        title: "Success",
+        description: `User ${isCurrentlyDisabled ? 'enabled' : 'disabled'} successfully`,
+      });
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update user status",
+        variant: "destructive",
+      });
+    }
+  };
+
   const deleteUser = async (userId: string) => {
     try {
       const { error } = await supabase.auth.admin.deleteUser(userId);
@@ -311,64 +348,103 @@ export const UsersPage = () => {
     }
   };
 
-  const UserCard = ({ user }: { user: UserData }) => (
-    <Card className="border border-gray-200">
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h3 className="font-medium text-gray-900 truncate">
-                {user.full_name || user.email}
-              </h3>
-              <p className="text-sm text-gray-600">{user.email}</p>
+  const isUserDisabled = (user: UserData) => {
+    return user.banned_until && new Date(user.banned_until) > new Date();
+  };
+
+  const UserCard = ({ user }: { user: UserData }) => {
+    const userIsDisabled = isUserDisabled(user);
+    
+    return (
+      <Card className="border border-gray-200">
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-medium text-gray-900 truncate">
+                  {user.full_name || user.email}
+                </h3>
+                <p className="text-sm text-gray-600">{user.email}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge 
+                  variant={getRoleBadgeVariant(user.role)}
+                  className={getRoleBadgeClass(user.role)}
+                >
+                  {user.role === "superadmin" && <Shield className="h-3 w-3 mr-1" />}
+                  {user.role.toUpperCase()}
+                </Badge>
+                {userIsDisabled && (
+                  <Badge variant="destructive">
+                    <UserX className="h-3 w-3 mr-1" />
+                    DISABLED
+                  </Badge>
+                )}
+              </div>
             </div>
-            <Badge 
-              variant={getRoleBadgeVariant(user.role)}
-              className={getRoleBadgeClass(user.role)}
-            >
-              {user.role === "superadmin" && <Shield className="h-3 w-3 mr-1" />}
-              {user.role.toUpperCase()}
-            </Badge>
+            
+            <div className="text-sm text-gray-500">
+              Created: {new Date(user.created_at).toLocaleDateString()}
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleUserRole(user.id, user.role)}
+                className="flex-1 sm:flex-none"
+                disabled={user.role === "superadmin" && !isSuperAdmin()}
+              >
+                <Edit className="h-4 w-4 mr-1" />
+                {getToggleButtonText(user.role)}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleChangePassword(user)}
+                className="flex-1 sm:flex-none"
+              >
+                <Key className="h-4 w-4 mr-1" />
+                Password
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toggleUserStatus(user.id, userIsDisabled)}
+                className={`flex-1 sm:flex-none ${
+                  userIsDisabled 
+                    ? 'text-green-600 hover:text-green-700' 
+                    : 'text-orange-600 hover:text-orange-700'
+                }`}
+                disabled={user.role === "superadmin" && !isSuperAdmin()}
+              >
+                {userIsDisabled ? (
+                  <>
+                    <UserCheck className="h-4 w-4 mr-1" />
+                    Enable
+                  </>
+                ) : (
+                  <>
+                    <UserX className="h-4 w-4 mr-1" />
+                    Disable
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-red-600 hover:text-red-700 flex-1 sm:flex-none"
+                onClick={() => deleteUser(user.id)}
+                disabled={user.role === "superadmin" && !isSuperAdmin()}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          
-          <div className="text-sm text-gray-500">
-            Created: {new Date(user.created_at).toLocaleDateString()}
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => toggleUserRole(user.id, user.role)}
-              className="flex-1 sm:flex-none"
-              disabled={user.role === "superadmin" && !isSuperAdmin()}
-            >
-              <Edit className="h-4 w-4 mr-1" />
-              {getToggleButtonText(user.role)}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleChangePassword(user)}
-              className="flex-1 sm:flex-none"
-            >
-              <Key className="h-4 w-4 mr-1" />
-              Password
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-red-600 hover:text-red-700 flex-1 sm:flex-none"
-              onClick={() => deleteUser(user.id)}
-              disabled={user.role === "superadmin" && !isSuperAdmin()}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+        </CardContent>
+      </Card>
+    );
+  };
 
   if (!isAdmin()) {
     return (
@@ -595,61 +671,102 @@ export const UsersPage = () => {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Created Date</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell className="font-medium">
-                      {user.full_name || user.email}
-                    </TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={getRoleBadgeVariant(user.role)}
-                        className={getRoleBadgeClass(user.role)}
-                      >
-                        {user.role === "superadmin" && <Shield className="h-3 w-3 mr-1" />}
-                        {user.role.toUpperCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-600">
-                      {new Date(user.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => toggleUserRole(user.id, user.role)}
-                          disabled={user.role === "superadmin" && !isSuperAdmin()}
+                {users.map((user) => {
+                  const userIsDisabled = isUserDisabled(user);
+                  
+                  return (
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium">
+                        {user.full_name || user.email}
+                      </TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={getRoleBadgeVariant(user.role)}
+                          className={getRoleBadgeClass(user.role)}
                         >
-                          <Edit className="h-4 w-4 mr-1" />
-                          {getToggleButtonText(user.role)}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleChangePassword(user)}
-                        >
-                          <Key className="h-4 w-4 mr-1" />
-                          Password
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 hover:text-red-700"
-                          onClick={() => deleteUser(user.id)}
-                          disabled={user.role === "superadmin" && !isSuperAdmin()}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          {user.role === "superadmin" && <Shield className="h-3 w-3 mr-1" />}
+                          {user.role.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {userIsDisabled ? (
+                          <Badge variant="destructive">
+                            <UserX className="h-3 w-3 mr-1" />
+                            Disabled
+                          </Badge>
+                        ) : (
+                          <Badge variant="default">
+                            <UserCheck className="h-3 w-3 mr-1" />
+                            Active
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-600">
+                        {new Date(user.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => toggleUserRole(user.id, user.role)}
+                            disabled={user.role === "superadmin" && !isSuperAdmin()}
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            {getToggleButtonText(user.role)}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleChangePassword(user)}
+                          >
+                            <Key className="h-4 w-4 mr-1" />
+                            Password
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => toggleUserStatus(user.id, userIsDisabled)}
+                            className={
+                              userIsDisabled 
+                                ? 'text-green-600 hover:text-green-700' 
+                                : 'text-orange-600 hover:text-orange-700'
+                            }
+                            disabled={user.role === "superadmin" && !isSuperAdmin()}
+                          >
+                            {userIsDisabled ? (
+                              <>
+                                <UserCheck className="h-4 w-4 mr-1" />
+                                Enable
+                              </>
+                            ) : (
+                              <>
+                                <UserX className="h-4 w-4 mr-1" />
+                                Disable
+                              </>
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => deleteUser(user.id)}
+                            disabled={user.role === "superadmin" && !isSuperAdmin()}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
