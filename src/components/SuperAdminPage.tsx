@@ -20,7 +20,9 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle,
-  XCircle
+  XCircle,
+  UserCheck,
+  UserX
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -47,7 +49,7 @@ interface UserData {
   full_name: string | null;
   role: "admin" | "user" | "superadmin";
   created_at: string;
-  banned_until?: string;
+  banned_until?: string | null;
 }
 
 export const SuperAdminPage = () => {
@@ -202,6 +204,41 @@ export const SuperAdminPage = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const toggleUserStatus = async (userId: string, isCurrentlyDisabled: boolean) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('toggle-user-status', {
+        body: {
+          userId,
+          disable: !isCurrentlyDisabled
+        }
+      });
+
+      if (error) {
+        const errorMessage = error.details || error.message || 'Unknown error occurred';
+        throw new Error(`Failed to toggle user status: ${errorMessage}`);
+      }
+
+      toast({
+        title: "Success",
+        description: `User ${isCurrentlyDisabled ? 'enabled' : 'disabled'} successfully`,
+      });
+
+      await loadUsers();
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to toggle user status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const isUserDisabled = (user: UserData) => {
+    if (!user.banned_until) return false;
+    return new Date(user.banned_until) > new Date();
   };
 
   const manageUser = async (action: string, userId: string, userData?: any) => {
@@ -518,68 +555,81 @@ export const SuperAdminPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">
-                        {user.full_name || user.email}
-                      </TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>
-                        <Select
-                          value={user.role}
-                          onValueChange={(value) => 
-                            manageUser('update', user.id, { role: value })
-                          }
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">User</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                            <SelectItem value="superadmin">Super Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        {user.banned_until ? (
-                          <Badge variant="destructive">
-                            <XCircle className="h-3 w-3 mr-1" />
-                            Disabled
-                          </Badge>
-                        ) : (
-                          <Badge variant="default">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Active
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-600">
-                        {new Date(user.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => 
-                              manageUser(user.banned_until ? 'enable' : 'disable', user.id)
+                  {users.map((user) => {
+                    const userIsDisabled = isUserDisabled(user);
+                    
+                    return (
+                      <TableRow key={user.id}>
+                        <TableCell className="font-medium">
+                          {user.full_name || user.email}
+                        </TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={user.role}
+                            onValueChange={(value) => 
+                              manageUser('update', user.id, { role: value })
                             }
                           >
-                            {user.banned_until ? 'Enable' : 'Disable'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => manageUser('delete', user.id)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="user">User</SelectItem>
+                              <SelectItem value="admin">Admin</SelectItem>
+                              <SelectItem value="superadmin">Super Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {userIsDisabled ? (
+                            <Badge variant="destructive">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Disabled
+                            </Badge>
+                          ) : (
+                            <Badge variant="default">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Active
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
+                          {new Date(user.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => toggleUserStatus(user.id, userIsDisabled)}
+                              className={userIsDisabled ? "text-green-600" : "text-orange-600"}
+                            >
+                              {userIsDisabled ? (
+                                <>
+                                  <UserCheck className="h-4 w-4 mr-1" />
+                                  Enable
+                                </>
+                              ) : (
+                                <>
+                                  <UserX className="h-4 w-4 mr-1" />
+                                  Disable
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-red-600 hover:text-red-700"
+                              onClick={() => manageUser('delete', user.id)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
