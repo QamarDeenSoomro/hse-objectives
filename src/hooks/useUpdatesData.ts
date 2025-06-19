@@ -8,6 +8,7 @@ interface UpdateFormData {
   achievedCount: number;
   updateDate: string;
   photos?: File[];
+  comments?: string;
 }
 
 interface EditUpdateData {
@@ -16,6 +17,7 @@ interface EditUpdateData {
   updateDate: string;
   photos?: File[];
   efficiency?: number;
+  comments?: string;
 }
 
 export const useUpdatesData = () => {
@@ -163,6 +165,7 @@ export const useUpdatesData = () => {
           update_date: formData.updateDate,
           photos: photoUrls.length > 0 ? photoUrls : null,
           efficiency: 100.00, // Default efficiency
+          comments: formData.comments || null,
         }])
         .select();
 
@@ -255,6 +258,7 @@ export const useUpdatesData = () => {
       const updateData: any = {
         achieved_count: formData.achievedCount, // This is the incremental count for this specific update
         update_date: formData.updateDate,
+        comments: formData.comments || null,
       };
 
       if (photoUrls.length > 0) {

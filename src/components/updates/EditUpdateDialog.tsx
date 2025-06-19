@@ -3,7 +3,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Edit } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Edit, Activity, MessageSquare } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface EditUpdateDialogProps {
   isOpen: boolean;
@@ -15,6 +18,7 @@ interface EditUpdateDialogProps {
     updateDate: string;
     photos: File[];
     efficiency?: number;
+    comments?: string;
   }) => void;
   isUpdating: boolean;
   isAdmin: boolean;
@@ -32,6 +36,7 @@ export const EditUpdateDialog = ({
     achievedCount: "",
     updateDate: "",
     efficiency: "",
+    comments: "",
   });
   const [editSelectedPhotos, setEditSelectedPhotos] = useState<File[]>([]);
 
@@ -41,6 +46,7 @@ export const EditUpdateDialog = ({
         achievedCount: editingUpdate.achieved_count.toString(),
         updateDate: editingUpdate.update_date,
         efficiency: editingUpdate.efficiency?.toString() || "100",
+        comments: editingUpdate.comments || "",
       });
       setEditSelectedPhotos([]);
     }
@@ -58,6 +64,7 @@ export const EditUpdateDialog = ({
       achievedCount: parseInt(editFormData.achievedCount),
       updateDate: editFormData.updateDate,
       photos: editSelectedPhotos,
+      comments: editFormData.comments.trim() || undefined,
     };
 
     if (isAdmin && editFormData.efficiency) {
@@ -66,7 +73,7 @@ export const EditUpdateDialog = ({
 
     onSubmit(updateData);
 
-    setEditFormData({ achievedCount: "", updateDate: "", efficiency: "" });
+    setEditFormData({ achievedCount: "", updateDate: "", efficiency: "", comments: "" });
     setEditSelectedPhotos([]);
   };
 
@@ -76,9 +83,15 @@ export const EditUpdateDialog = ({
     }
   };
 
+  const handleClose = () => {
+    setEditFormData({ achievedCount: "", updateDate: "", efficiency: "", comments: "" });
+    setEditSelectedPhotos([]);
+    onOpenChange(false);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Edit className="h-5 w-5 text-blue-600" />
@@ -88,6 +101,26 @@ export const EditUpdateDialog = ({
             Modify the progress update details. This represents the incremental activities completed in this specific update.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Objective Information */}
+        {editingUpdate && (
+          <Card className="bg-gray-50 border-gray-200">
+            <CardContent className="p-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-gray-600" />
+                  <span className="font-medium text-gray-900">Objective Information</span>
+                </div>
+                <div className="text-sm text-gray-700">
+                  <p><strong>Title:</strong> {editingUpdate.objective?.title}</p>
+                  <p><strong>Total Activities:</strong> {editingUpdate.objective?.num_activities}</p>
+                  <p><strong>Original Update Date:</strong> {new Date(editingUpdate.update_date).toLocaleDateString()}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <form onSubmit={handleEditSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="editAchievedCount">Activities Completed (This Update)</Label>
@@ -103,6 +136,7 @@ export const EditUpdateDialog = ({
               This is the number of activities completed specifically in this update, not the total cumulative count.
             </p>
           </div>
+
           <div className="space-y-2">
             <Label htmlFor="editUpdateDate">Update Date</Label>
             <Input
@@ -112,6 +146,7 @@ export const EditUpdateDialog = ({
               onChange={(e) => setEditFormData(prev => ({ ...prev, updateDate: e.target.value }))}
             />
           </div>
+
           {isAdmin && (
             <div className="space-y-2">
               <Label htmlFor="editEfficiency">Efficiency Rating (%)</Label>
@@ -130,6 +165,22 @@ export const EditUpdateDialog = ({
               </p>
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="editComments">Comments</Label>
+            <Textarea
+              id="editComments"
+              value={editFormData.comments}
+              onChange={(e) => setEditFormData(prev => ({ ...prev, comments: e.target.value }))}
+              placeholder="Add or edit comments about this update..."
+              rows={3}
+              className="resize-none"
+            />
+            <p className="text-xs text-gray-500">
+              Update any comments about this progress update, challenges, or achievements.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="editPhotos">Add New Photos (Optional)</Label>
             <Input
@@ -141,16 +192,18 @@ export const EditUpdateDialog = ({
               className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
             />
             {editSelectedPhotos.length > 0 && (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-600 flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
                 {editSelectedPhotos.length} new photo(s) selected
               </div>
             )}
           </div>
+
           <div className="flex justify-end gap-3">
             <Button 
               type="button" 
               variant="outline" 
-              onClick={() => onOpenChange(false)}
+              onClick={handleClose}
             >
               Cancel
             </Button>
