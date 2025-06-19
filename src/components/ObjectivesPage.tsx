@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Target, Users } from "lucide-react";
+import { ArrowLeft, Target, Users, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -233,13 +233,58 @@ export const ObjectivesPage = () => {
         )}
       </div>
 
+      {/* Quick User List - Only show for admins */}
+      {isAdmin() && users.length > 0 && (
+        <Card className="border-0 shadow-lg">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="h-5 w-5 text-blue-600" />
+              Quick User Access
+            </CardTitle>
+            <CardDescription>
+              Click on any user to view their objectives
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={!userIdFromUrl ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleUserSelect("all-users")}
+                className="flex items-center gap-2"
+              >
+                <Users className="h-4 w-4" />
+                All Users ({objectives.length})
+              </Button>
+              {users.map((user) => {
+                const userObjectives = objectives.filter(obj => obj.owner_id === user.id);
+                const isSelected = userIdFromUrl === user.id;
+                
+                return (
+                  <Button
+                    key={user.id}
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleUserSelect(user.id)}
+                    className="flex items-center gap-2"
+                  >
+                    <User className="h-4 w-4" />
+                    {user.full_name || user.email} ({userObjectives.length})
+                  </Button>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* User Selector for Admins */}
       {isAdmin() && users.length > 0 && (
         <Card className="border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-blue-600" />
-              Quick User Navigation
+              User Navigation
             </CardTitle>
             <CardDescription>
               Select a user to view their objectives or view all objectives
