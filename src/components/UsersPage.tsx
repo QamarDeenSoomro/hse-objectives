@@ -248,22 +248,22 @@ export const UsersPage = () => {
 
   const toggleUserStatus = async (userId: string, isCurrentlyDisabled: boolean) => {
     try {
-      // If user is currently disabled, enable them (remove ban)
-      // If user is currently enabled, disable them (add ban)
-      const banDuration = isCurrentlyDisabled ? null : '876000h'; // ~100 years for disable
+      // If user is currently disabled, enable them (set banned_until to null)
+      // If user is currently enabled, disable them (set banned_until to far future)
+      const bannedUntil = isCurrentlyDisabled ? null : new Date(Date.now() + 876000 * 60 * 60 * 1000).toISOString();
       
-      const { error } = await supabase.auth.admin.updateUserById(
-        userId,
-        { ban_duration: banDuration }
-      );
+      const { error } = await supabase
+        .from('profiles')
+        .update({ banned_until: bannedUntil })
+        .eq('id', userId);
 
       if (error) throw error;
 
-      // Update local state to reflect the change
+      // Update local state to reflect the change immediately
       setUsers(prevUsers => 
         prevUsers.map(user => 
           user.id === userId 
-            ? { ...user, banned_until: isCurrentlyDisabled ? undefined : new Date(Date.now() + 876000 * 60 * 60 * 1000).toISOString() }
+            ? { ...user, banned_until: bannedUntil || undefined }
             : user
         )
       );
