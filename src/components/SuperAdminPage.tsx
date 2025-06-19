@@ -233,9 +233,23 @@ export const SuperAdminPage = () => {
       await loadUsers();
     } catch (error) {
       console.error(`Error toggling user status:`, error);
+      
+      // Enhanced error handling for network issues
+      let errorMessage = `Failed to toggle user status`;
+      
+      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+        errorMessage = "Network connection error. Please check your internet connection and ensure the server is accessible. The Edge Function may not be deployed or there could be a connectivity issue.";
+      } else if (error instanceof Error) {
+        if (error.message.includes('Failed to send a request')) {
+          errorMessage = "Unable to connect to the user management service. Please check your network connection and try again.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : `Failed to toggle user status`,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

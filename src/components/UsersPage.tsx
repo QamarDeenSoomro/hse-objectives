@@ -165,28 +165,20 @@ export const UsersPage = () => {
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('No active session');
-      }
-
-      const response = await fetch('/functions/v1/admin-update-password', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Use supabase.functions.invoke instead of direct fetch
+      const { data, error } = await supabase.functions.invoke('admin-update-password', {
+        body: {
           userId: selectedUser.id,
           newPassword: newPassword
-        }),
+        }
       });
 
-      const result = await response.json();
+      if (error) {
+        throw new Error(error.message || 'Failed to update password');
+      }
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to update password');
+      if (data?.error) {
+        throw new Error(data.error);
       }
 
       toast({
