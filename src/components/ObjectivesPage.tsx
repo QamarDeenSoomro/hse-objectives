@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Target } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Target, Users } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,7 +22,7 @@ import { useObjectivesData } from "@/hooks/useObjectivesData";
 
 export const ObjectivesPage = () => {
   const { isAdmin, profile } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   
   // State
@@ -159,6 +160,14 @@ export const ObjectivesPage = () => {
     navigate('/');
   };
 
+  const handleUserSelect = (userId: string) => {
+    if (userId === "all-users") {
+      setSearchParams({});
+    } else {
+      setSearchParams({ userId });
+    }
+  };
+
   // Render loading state
   if (loading) {
     return (
@@ -223,6 +232,46 @@ export const ObjectivesPage = () => {
           />
         )}
       </div>
+
+      {/* User Selector for Admins */}
+      {isAdmin() && users.length > 0 && (
+        <Card className="border-0 shadow-lg">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-600" />
+              Quick User Navigation
+            </CardTitle>
+            <CardDescription>
+              Select a user to view their objectives or view all objectives
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+              <div className="flex-1 min-w-0 max-w-md">
+                <Select value={userIdFromUrl || "all-users"} onValueChange={handleUserSelect}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a user to view their objectives" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all-users">All Users</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.full_name || user.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-sm text-gray-600">
+                {userIdFromUrl 
+                  ? `Showing objectives for ${filteredUser?.full_name || filteredUser?.email || 'selected user'}`
+                  : `Showing all objectives (${objectives.length} total)`
+                }
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Objectives Display */}
       {isAdmin() ? (
