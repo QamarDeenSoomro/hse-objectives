@@ -57,13 +57,17 @@ Deno.serve(async (req) => {
     }
 
     // Get the request body
-    const { userId, action } = await req.json();
+    const requestBody = await req.json();
+    const userId = requestBody.userId;
+    // Support both action and disable parameters for backward compatibility
+    const action = requestBody.action || (requestBody.disable === true ? 'disable' : 'enable');
 
-    if (!userId || !action) {
-      throw new Error('Missing userId or action');
+    if (!userId) {
+      throw new Error('Missing userId parameter');
     }
 
     let result;
+    let banned_until = null;
 
     if (action === 'enable') {
       // Enable user by removing ban
@@ -83,7 +87,7 @@ Deno.serve(async (req) => {
         console.warn('Could not update profile banned_until:', profileUpdateError);
       }
 
-      result = { success: true, message: 'User enabled successfully' };
+      result = { success: true, message: 'User enabled successfully', banned_until: null };
 
     } else if (action === 'disable') {
       // Disable user by setting a long ban duration
@@ -96,17 +100,18 @@ Deno.serve(async (req) => {
       // Update profile to set banned_until
       const futureDate = new Date();
       futureDate.setFullYear(futureDate.getFullYear() + 100);
+      banned_until = futureDate.toISOString();
       
       const { error: profileUpdateError } = await supabaseAdmin
         .from('profiles')
-        .update({ banned_until: futureDate.toISOString() })
+        .update({ banned_until })
         .eq('id', userId);
 
       if (profileUpdateError) {
         console.warn('Could not update profile banned_until:', profileUpdateError);
       }
 
-      result = { success: true, message: 'User disabled successfully' };
+      result = { success: true, message: 'User disabled successfully', banned_until };
 
     } else {
       throw new Error('Invalid action. Use "enable" or "disable"');
