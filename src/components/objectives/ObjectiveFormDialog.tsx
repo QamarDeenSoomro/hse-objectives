@@ -50,7 +50,7 @@ export const ObjectiveFormDialog = ({
             {editingObjective ? "Edit Objective" : "Add New Objective"}
           </DialogTitle>
           <DialogDescription>
-            {editingObjective ? "Update the objective details" : "Create a new HSE objective"}
+            {editingObjective ? "Update the objective details" : "Create a new OHIH objective"}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
