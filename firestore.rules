@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Profiles can be read by any authenticated user, but only written by the user themselves or an admin.
+    match /profiles/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == userId || request.auth.token.role == 'admin' || request.auth.token.role == 'superadmin';
+    }
+
+    // Action items can be read by any authenticated user.
+    // They can be created, updated, or deleted by any authenticated user.
+    // More specific rules can be added here based on roles (e.g., assigned_to, created_by).
+    match /action_items/{actionItemId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Daily work entries can be read by any authenticated user.
+    // Users can only create/update/delete their own entries, while admins can manage all.
+    match /daily_work/{workId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth.uid == request.resource.data.user_id;
+      allow update, delete: if request.auth.uid == resource.data.user_id || request.auth.token.role == 'admin' || request.auth.token.role == 'superadmin';
+    }
+
+    // Objectives can be read by any authenticated user.
+    // Write access is limited.
+    match /objectives/{objectiveId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth.uid == resource.data.owner_id || request.auth.token.role == 'admin' || request.auth.token.role == 'superadmin';
+    }
+
+    // Objective updates can be read by any authenticated user.
+    // Write access is limited.
+    match /objective_updates/{updateId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth.uid == request.resource.data.user_id;
+        allow update, delete: if request.auth.uid == resource.data.user_id || request.auth.token.role == 'admin' || request.auth.token.role == 'superadmin';
+    }
+  }
+}
