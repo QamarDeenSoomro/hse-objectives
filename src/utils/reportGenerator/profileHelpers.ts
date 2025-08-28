@@ -1,7 +1,8 @@
 
 // Profile utilities for report generation
 
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, getDocs } from "firebase/firestore";
 
 export type ProfileRow = {
   id: string;
@@ -13,8 +14,9 @@ export type ProfileRow = {
 };
 
 export async function loadProfiles(): Promise<ProfileRow[]> {
-  const { data } = await supabase.from('profiles').select('*');
-  return data || [];
+  const profilesQuery = collection(db, "profiles");
+  const profilesSnapshot = await getDocs(profilesQuery);
+  return profilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProfileRow));
 }
 
 export function findDisplayName(profile?: ProfileRow) {

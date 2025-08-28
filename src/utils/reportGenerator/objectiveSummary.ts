@@ -1,5 +1,6 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, where, orderBy, getDocs, limit } from "firebase/firestore";
 import { loadProfiles, findDisplayName, ProfileRow } from "./profileHelpers";
 
 type ObjectiveRow = {
@@ -25,12 +26,11 @@ function dateInRange(dateStr: string, from?: Date, to?: Date): boolean {
 export async function generateObjectiveSummaryData(dateFrom?: Date, dateTo?: Date, selectedUser?: string) {
   let profileRows: ProfileRow[] = [];
   profileRows = await loadProfiles();
-  let { data: objectives_ } = await supabase
-    .from('objectives')
-    .select('*')
-    .order('created_at', { ascending: false });
 
-  let objectives = objectives_ || [];
+  let objectivesQuery = query(collection(db, "objectives"), orderBy("created_at", "desc"));
+  const objectivesSnapshot = await getDocs(objectivesQuery);
+  let objectives = objectivesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as ObjectiveRow }));
+
   if (selectedUser && selectedUser !== "all-users") {
     objectives = objectives.filter(
       (o: ObjectiveRow) => o.owner_id === selectedUser || o.created_by === selectedUser
@@ -44,12 +44,14 @@ export async function generateObjectiveSummaryData(dateFrom?: Date, dateTo?: Dat
 
   const data: any[] = [];
   for (const obj of objectives) {
-    const { data: updates } = await supabase
-      .from('objective_updates')
-      .select('*')
-      .eq('objective_id', obj.id)
-      .order('update_date', { ascending: false })
-      .limit(1);
+    const updatesQuery = query(
+        collection(db, "objective_updates"),
+        where("objective_id", "==", obj.id),
+        orderBy("update_date", "desc"),
+        limit(1)
+    );
+    const updatesSnapshot = await getDocs(updatesQuery);
+    const updates = updatesSnapshot.docs.map(doc => doc.data());
     
     let effectiveProgress = 0;
     let status = "Pending";

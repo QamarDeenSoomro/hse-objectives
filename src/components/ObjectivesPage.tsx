@@ -6,8 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Target, Users, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
 
 // Components
 import { UpdateDetailDialog } from "@/components/UpdateDetailDialog";
@@ -68,24 +69,22 @@ export const ObjectivesPage = () => {
   // Event handlers
   const handleViewUpdates = async (objectiveId: string, objectiveTitle: string) => {
     try {
-      const { data, error } = await supabase
-        .from('objective_updates')
-        .select(`
-          *,
-          user:profiles!user_id(full_name, email)
-        `)
-        .eq('objective_id', objectiveId)
-        .order('update_date', { ascending: false });
+        const updatesQuery = query(
+            collection(db, "objective_updates"),
+            where("objective_id", "==", objectiveId),
+            orderBy("update_date", "desc")
+        );
+        const updatesSnapshot = await getDocs(updatesQuery);
+        const updates = updatesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      if (error) throw error;
-
-      const transformedUpdates = data.map(update => ({
-        ...update,
-        user: {
-          full_name: update.user?.full_name || '',
-          email: update.user?.email || ''
-        }
-      }));
+        // TODO: This is a temporary fix. The user's profile should be fetched and joined here.
+        const transformedUpdates = updates.map((update: any) => ({
+            ...update,
+            user: {
+              full_name: 'Unknown User', // Placeholder
+              email: 'unknown@example.com' // Placeholder
+            }
+        }));
 
       setSelectedObjectiveUpdates(transformedUpdates);
       setSelectedObjectiveTitle(objectiveTitle);

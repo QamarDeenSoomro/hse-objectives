@@ -1,4 +1,5 @@
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { loadProfiles, findDisplayName, ProfileRow } from "./profileHelpers";
 
 type ActionItemRow = {
@@ -47,22 +48,17 @@ export async function generateActionItemsReportData(dateFrom?: Date, dateTo?: Da
   let profileRows: ProfileRow[] = [];
   profileRows = await loadProfiles();
 
-  let { data: actionItems_ } = await supabase
-    .from('action_items')
-    .select('*')
-    .order('created_at', { ascending: false });
+  const actionItemsQuery = query(collection(db, "action_items"), orderBy("created_at", "desc"));
+  const actionItemsSnapshot = await getDocs(actionItemsQuery);
+  let actionItems = actionItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as ActionItemRow }));
 
-  let { data: closures_ } = await supabase
-    .from('action_item_closures')
-    .select('*');
+  const closuresQuery = query(collection(db, "action_item_closures"));
+  const closuresSnapshot = await getDocs(closuresQuery);
+  let closures = closuresSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as ActionItemClosureRow }));
 
-  let { data: verifications_ } = await supabase
-    .from('action_item_verifications')
-    .select('*');
-
-  let actionItems = actionItems_ || [];
-  let closures = closures_ || [];
-  let verifications = verifications_ || [];
+  const verificationsQuery = query(collection(db, "action_item_verifications"));
+  const verificationsSnapshot = await getDocs(verificationsQuery);
+  let verifications = verificationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as ActionItemVerificationRow }));
 
   // Apply date filtering
   if (dateFrom || dateTo) {

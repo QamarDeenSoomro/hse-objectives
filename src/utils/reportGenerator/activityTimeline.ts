@@ -1,5 +1,6 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { loadProfiles, findDisplayName, ProfileRow } from "./profileHelpers";
 
 type ObjectiveRow = {
@@ -45,22 +46,18 @@ function dateInRange(dateStr: string, from?: Date, to?: Date): boolean {
 export async function generateActivityTimelineData(dateFrom?: Date, dateTo?: Date, selectedUser?: string) {
   let profileRows: ProfileRow[] = [];
   profileRows = await loadProfiles();
-  let { data: objectives_ } = await supabase
-    .from('objectives')
-    .select('*')
-    .order('created_at', { ascending: false });
-  let { data: updates_ } = await supabase
-    .from('objective_updates')
-    .select('*')
-    .order('update_date', { ascending: false });
-  let { data: works_ } = await supabase
-    .from('daily_work')
-    .select('*')
-    .order('work_date', { ascending: false });
 
-  let objectives = objectives_ || [];
-  let updates = updates_ || [];
-  let works = works_ || [];
+  const objectivesQuery = query(collection(db, "objectives"), orderBy("created_at", "desc"));
+  const objectivesSnapshot = await getDocs(objectivesQuery);
+  let objectives = objectivesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as ObjectiveRow }));
+
+  const updatesQuery = query(collection(db, "objective_updates"), orderBy("update_date", "desc"));
+  const updatesSnapshot = await getDocs(updatesQuery);
+  let updates = updatesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as ObjectiveUpdateRow }));
+
+  const worksQuery = query(collection(db, "daily_work"), orderBy("work_date", "desc"));
+  const worksSnapshot = await getDocs(worksQuery);
+  let works = worksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as DailyWorkRow }));
 
   if (dateFrom || dateTo) {
     objectives = objectives.filter(

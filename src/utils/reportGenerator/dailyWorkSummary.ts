@@ -1,5 +1,6 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { loadProfiles, findDisplayName, ProfileRow } from "./profileHelpers";
 
 type DailyWorkRow = {
@@ -23,11 +24,11 @@ function dateInRange(dateStr: string, from?: Date, to?: Date): boolean {
 export async function generateDailyWorkSummaryData(dateFrom?: Date, dateTo?: Date, selectedUser?: string) {
   let profileRows: ProfileRow[] = [];
   profileRows = await loadProfiles();
-  let { data: works_ } = await supabase
-    .from('daily_work')
-    .select('*')
-    .order('work_date', { ascending: false });
-  let works = works_ || [];
+
+  const worksQuery = query(collection(db, "daily_work"), orderBy("work_date", "desc"));
+  const worksSnapshot = await getDocs(worksQuery);
+  let works = worksSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as DailyWorkRow }));
+
   if (selectedUser && selectedUser !== "all-users") {
     works = works.filter((w: DailyWorkRow) => w.user_id === selectedUser);
   }

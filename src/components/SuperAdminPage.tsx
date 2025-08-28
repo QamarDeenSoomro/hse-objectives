@@ -24,7 +24,9 @@ import {
   UserCheck,
   UserX
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { db, app } from "@/integrations/firebase/client";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface SystemSetting {
   id: string;
@@ -103,20 +105,13 @@ export const SuperAdminPage = () => {
     }
   };
 
+  const functions = getFunctions(app);
+
   const loadSystemSettings = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('superadmin-system-settings', {
-        method: 'GET'
-      });
-
-      if (error) {
-        // Enhance error with more specific details
-        const enhancedError = new Error(`System Settings Error: ${error.message || 'Unknown error'}`);
-        if (error.details) {
-          (enhancedError as any).details = error.details;
-        }
-        throw enhancedError;
-      }
+      const superadminSystemSettings = httpsCallable(functions, 'superadminSystemSettings');
+      const result = await superadminSystemSettings({ method: 'GET' });
+      const data = result.data as { settings: SystemSetting[], permissions: ComponentPermission[] };
 
       setSystemSettings(data.settings || []);
       setComponentPermissions(data.permissions || []);
@@ -128,13 +123,10 @@ export const SuperAdminPage = () => {
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setUsers(data || []);
+      const usersQuery = query(collection(db, "profiles"), orderBy("created_at", "desc"));
+      const usersSnapshot = await getDocs(usersQuery);
+      const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData));
+      setUsers(users);
     } catch (error) {
       console.error('Error loading users:', error);
       throw error;
@@ -143,22 +135,16 @@ export const SuperAdminPage = () => {
 
   const updateSystemSetting = async (key: string, value: any, description?: string) => {
     try {
-      const { error } = await supabase.functions.invoke('superadmin-system-settings', {
+      const superadminSystemSettings = httpsCallable(functions, 'superadminSystemSettings');
+      await superadminSystemSettings({
         method: 'POST',
-        body: {
-          type: 'system_setting',
-          data: {
-            setting_key: key,
-            setting_value: value,
-            description
-          }
+        type: 'system_setting',
+        data: {
+          setting_key: key,
+          setting_value: value,
+          description
         }
       });
-
-      if (error) {
-        const errorMessage = error.details || error.message || 'Unknown error occurred';
-        throw new Error(`Failed to update system setting: ${errorMessage}`);
-      }
 
       toast({
         title: "Success",
@@ -178,18 +164,12 @@ export const SuperAdminPage = () => {
 
   const updateComponentPermission = async (permission: ComponentPermission) => {
     try {
-      const { error } = await supabase.functions.invoke('superadmin-system-settings', {
+      const superadminSystemSettings = httpsCallable(functions, 'superadminSystemSettings');
+      await superadminSystemSettings({
         method: 'POST',
-        body: {
-          type: 'component_permission',
-          data: permission
-        }
+        type: 'component_permission',
+        data: permission
       });
-
-      if (error) {
-        const errorMessage = error.details || error.message || 'Unknown error occurred';
-        throw new Error(`Failed to update component permission: ${errorMessage}`);
-      }
 
       toast({
         title: "Success",
@@ -211,19 +191,11 @@ export const SuperAdminPage = () => {
     setTogglingUsers(prev => new Set(prev).add(userId));
     
     try {
-      const action = currentlyBanned ? 'enable' : 'disable';
-      
-      const { data, error } = await supabase.functions.invoke('toggle-user-status', {
-        body: {
-          userId,
-          action
-        }
+      const toggleUserStatusFunc = httpsCallable(functions, 'toggleUserStatus');
+      await toggleUserStatusFunc({
+        uid: userId,
+        disabled: !currentlyBanned
       });
-
-      if (error) {
-        const errorMessage = error.details || error.message || 'Unknown error occurred';
-        throw new Error(`Failed to ${action} user: ${errorMessage}`);
-      }
 
       toast({
         title: "Success",
@@ -263,19 +235,12 @@ export const SuperAdminPage = () => {
 
   const manageUser = async (action: string, userId: string, userData?: any) => {
     try {
-      const { error } = await supabase.functions.invoke('superadmin-manage-users', {
-        method: 'POST',
-        body: {
-          action,
-          userId,
-          userData
-        }
+      const superadminManageUsers = httpsCallable(functions, 'superadminManageUsers');
+      await superadminManageUsers({
+        action,
+        userId,
+        userData
       });
-
-      if (error) {
-        const errorMessage = error.details || error.message || 'Unknown error occurred';
-        throw new Error(`Failed to ${action} user: ${errorMessage}`);
-      }
 
       toast({
         title: "Success",

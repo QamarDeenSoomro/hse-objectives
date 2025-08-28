@@ -1,5 +1,6 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { loadProfiles, findDisplayName, ProfileRow } from "./profileHelpers";
 
 function dateInRange(dateStr: string, from?: Date, to?: Date): boolean {
@@ -19,19 +20,21 @@ export async function generateTeamPerformanceData(dateFrom?: Date, dateTo?: Date
   }
   const data: any[] = [];
   for (const user of relevantUsers) {
-    let { data: objectives } = await supabase
-      .from('objectives')
-      .select('id')
-      .eq('owner_id', user.id);
-    const objs = objectives || [];
+    const objectivesQuery = query(collection(db, "objectives"), where("owner_id", "==", user.id));
+    const objectivesSnapshot = await getDocs(objectivesQuery);
+    const objs = objectivesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
     let completedObjectives = 0, pendingObjectives = 0;
     let lastActivityDate: Date | null = null;
     for (const o of objs) {
-      const { data: updates } = await supabase
-        .from('objective_updates')
-        .select('achieved_count, update_date')
-        .eq('objective_id', o.id)
-        .order('update_date', { ascending: false });
+      const updatesQuery = query(
+          collection(db, "objective_updates"),
+          where("objective_id", "==", o.id),
+          orderBy("update_date", "desc")
+      );
+      const updatesSnapshot = await getDocs(updatesQuery);
+      const updates = updatesSnapshot.docs.map(doc => doc.data());
+
       if (updates && updates.length > 0) {
         const lastUpdate = updates[0];
         if (lastUpdate.achieved_count >= 100) completedObjectives++;

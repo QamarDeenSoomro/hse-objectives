@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CheckSquare, Activity, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, where, orderBy, getDocs } from "firebase/firestore";
 
 interface UpdateFormDialogProps {
   isOpen: boolean;
@@ -60,16 +61,13 @@ export const UpdateFormDialog = ({
       if (!objective) return;
 
       // Get all updates for this objective
-      const { data: updates, error } = await supabase
-        .from('objective_updates')
-        .select('achieved_count, efficiency')
-        .eq('objective_id', objectiveId)
-        .order('update_date', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching updates:', error);
-        return;
-      }
+      const updatesQuery = query(
+          collection(db, "objective_updates"),
+          where("objective_id", "==", objectiveId),
+          orderBy("update_date", "asc")
+      );
+      const updatesSnapshot = await getDocs(updatesQuery);
+      const updates = updatesSnapshot.docs.map(doc => doc.data());
 
       // Calculate cumulative progress
       let totalAchievedCount = 0;

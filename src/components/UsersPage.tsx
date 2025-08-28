@@ -10,7 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Plus, Edit, Trash2, Users, Shield, User, Key, UserCheck, UserX } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { db, app } from "@/integrations/firebase/client";
+import { collection, query, orderBy, getDocs, updateDoc, doc } from "firebase/firestore";
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 interface UserData {
   id: string;
@@ -36,6 +38,8 @@ export const UsersPage = () => {
     password: "",
   });
 
+  const functions = getFunctions(app);
+
   useEffect(() => {
     if (isAdmin()) {
       fetchUsers();
@@ -44,15 +48,10 @@ export const UsersPage = () => {
 
   const fetchUsers = async () => {
     try {
-      const { data, error }  = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      
-      console.log("Fetched users:", data);
-      setUsers(data || []);
+      const usersQuery = query(collection(db, "profiles"), orderBy("created_at", "desc"));
+      const usersSnapshot = await getDocs(usersQuery);
+      const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData));
+      setUsers(users);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -95,27 +94,13 @@ export const UsersPage = () => {
         hasPassword: !!formData.password
       });
 
-      // Call the Edge Function instead of admin.createUser
-      const { data, error } = await supabase.functions.invoke('create-user', {
-        body: {
-          email: formData.email,
-          password: formData.password,
-          fullName: formData.fullName,
-          role: formData.role
-        }
+      const createUser = httpsCallable(functions, 'createUser');
+      await createUser({
+        email: formData.email,
+        password: formData.password,
+        fullName: formData.fullName,
+        role: formData.role
       });
-
-      console.log('Edge Function response:', { data, error });
-
-      if (error) {
-        console.error('Edge Function error:', error);
-        throw new Error(error.message || 'Failed to call Edge Function');
-      }
-
-      if (data?.error) {
-        console.error('Edge Function returned error:', data.error);
-        throw new Error(data.error);
-      }
 
       toast({
         title: "Success",
@@ -165,21 +150,11 @@ export const UsersPage = () => {
     }
 
     try {
-      // Use supabase.functions.invoke instead of direct fetch
-      const { data, error } = await supabase.functions.invoke('admin-update-password', {
-        body: {
-          userId: selectedUser.id,
-          newPassword: newPassword
-        }
+      const adminUpdatePassword = httpsCallable(functions, 'adminUpdatePassword');
+      await adminUpdatePassword({
+        uid: selectedUser.id,
+        password: newPassword
       });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to update password');
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
 
       toast({
         title: "Success",
@@ -218,12 +193,10 @@ export const UsersPage = () => {
         newRole = currentRole === "admin" ? "user" : "admin";
       }
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
+      const userDoc = doc(db, "profiles", userId);
+      await updateDoc(userDoc, { role: newRole });
 
-      if (error) throw error;
+      // TODO: Also update custom claims for the user in Firebase Auth
 
       toast({
         title: "Success",
@@ -249,37 +222,11 @@ export const UsersPage = () => {
     try {
       setLoading(true);
       
-      // Get the current session
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('No active session');
-      }
-      
-      // Call the Edge Function to toggle user status
-      const { data, error } = await supabase.functions.invoke('toggle-user-status', {
-        body: {
-          userId,
-          disable: !isCurrentlyDisabled
-        }
+      const toggleUserStatusFunc = httpsCallable(functions, 'toggleUserStatus');
+      await toggleUserStatusFunc({
+        uid: userId,
+        disabled: !isCurrentlyDisabled
       });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to toggle user status');
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-
-      // Update local state to reflect the change immediately
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === userId 
-            ? { ...user, banned_until: data.banned_until }
-            : user
-        )
-      );
 
       toast({
         title: "Success",
@@ -302,9 +249,8 @@ export const UsersPage = () => {
 
   const deleteUser = async (userId: string) => {
     try {
-      const { error } = await supabase.auth.admin.deleteUser(userId);
-
-      if (error) throw error;
+      const deleteUserFunc = httpsCallable(functions, 'deleteUser');
+      await deleteUserFunc({ uid: userId });
 
       toast({
         title: "Success",

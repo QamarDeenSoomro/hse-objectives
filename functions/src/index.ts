@@ -80,3 +80,19 @@ export const superadminSystemSettings = functions.https.onCall(async (data, cont
     console.log("superadminSystemSettings called with:", data);
     return { status: "not implemented" };
 });
+
+export const deleteUser = functions.https.onCall(async (data, context) => {
+    if (context.auth?.token.role !== 'superadmin') {
+        throw new functions.https.HttpsError('permission-denied', 'Only superadmins can delete users.');
+    }
+
+    const { uid } = data;
+
+    try {
+        await admin.auth().deleteUser(uid);
+        await admin.firestore().collection('profiles').doc(uid).delete();
+        return { success: true };
+    } catch (error) {
+        throw new functions.https.HttpsError('internal', (error as Error).message);
+    }
+});

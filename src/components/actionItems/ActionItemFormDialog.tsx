@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Target } from "lucide-react";
 import { ActionItem, ActionItemFormData, PRIORITY_OPTIONS } from "@/types/actionItems";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
 
 interface ActionItemFormDialogProps {
   isOpen: boolean;
@@ -38,13 +39,9 @@ export const ActionItemFormDialog = ({
   const { data: users = [] } = useQuery({
     queryKey: ['users-for-assignment'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .order('full_name');
-
-      if (error) throw error;
-      return data;
+      const usersQuery = query(collection(db, "profiles"), orderBy("full_name"));
+      const usersSnapshot = await getDocs(usersQuery);
+      return usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
   });
 

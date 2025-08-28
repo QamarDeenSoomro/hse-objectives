@@ -1,5 +1,6 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, where, orderBy, getDocs, doc, getDoc } from "firebase/firestore";
 import { loadProfiles, findDisplayName, ProfileRow } from "./profileHelpers";
 
 type ObjectiveUpdateRow = {
@@ -24,11 +25,11 @@ function dateInRange(dateStr: string, from?: Date, to?: Date): boolean {
 export async function generateProgressReportData(dateFrom?: Date, dateTo?: Date, selectedUser?: string) {
   let profileRows: ProfileRow[] = [];
   profileRows = await loadProfiles();
-  let { data: updates_ } = await supabase
-    .from('objective_updates')
-    .select('*')
-    .order('update_date', { ascending: false });
-  let updates = updates_ || [];
+
+  let updatesQuery = query(collection(db, "objective_updates"), orderBy("update_date", "desc"));
+  const updatesSnapshot = await getDocs(updatesQuery);
+  let updates = updatesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as ObjectiveUpdateRow }));
+
   if (selectedUser && selectedUser !== "all-users") {
     updates = updates.filter(
       (u: ObjectiveUpdateRow) => u.user_id === selectedUser
@@ -39,11 +40,9 @@ export async function generateProgressReportData(dateFrom?: Date, dateTo?: Date,
   );
   const data: any[] = [];
   for (const upd of updates) {
-    let { data: obj } = await supabase
-      .from('objectives')
-      .select('title, num_activities')
-      .eq('id', upd.objective_id)
-      .maybeSingle();
+    const objDoc = await getDoc(doc(db, "objectives", upd.objective_id));
+    const obj = objDoc.exists() ? objDoc.data() : null;
+
     const user = profileRows.find(p => p.id === upd.user_id);
     
     // Calculate effective completion based on efficiency

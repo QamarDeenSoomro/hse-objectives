@@ -22,7 +22,8 @@ import {
   generateDailyWorkSummaryData,
   generateActivityTimelineData
 } from "@/utils/reportGenerator";
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/integrations/firebase/client";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
 
 interface UserProfile {
   id: string;
@@ -60,13 +61,10 @@ export const ReportsPage = () => {
   const fetchUsers = async () => {
     setLoadingUsers(true);
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .order('full_name', { ascending: true });
-
-      if (error) throw error;
-      setUsers(data || []);
+        const usersQuery = query(collection(db, "profiles"), orderBy("full_name", "asc"));
+        const usersSnapshot = await getDocs(usersQuery);
+        const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile));
+        setUsers(users);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
