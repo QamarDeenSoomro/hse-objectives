@@ -6,12 +6,13 @@ import { getStorage } from "firebase/storage";
 
 // TODO: Add your own Firebase configuration from your Firebase project settings
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAIeAfGNHZpMSpWlMGi-tphyBm86bTcTu4",
+  authDomain: "hse-objectives.firebaseapp.com",
+  projectId: "hse-objectives",
+  storageBucket: "hse-objectives.firebasestorage.app",
+  messagingSenderId: "921525802344",
+  appId: "1:921525802344:web:e329d7aa5f87d0581db2dd",
+  measurementId: "G-P1J75X1ZHQ"
 };
 
 // Initialize Firebase
