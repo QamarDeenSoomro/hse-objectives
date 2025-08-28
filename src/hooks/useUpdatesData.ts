@@ -1,5 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { db, storage } from "@/integrations/firebase/client";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
+  orderBy,
+  Timestamp,
+  getDoc,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -20,323 +34,145 @@ interface EditUpdateData {
   comments?: string;
 }
 
+interface UpdateData {
+    achieved_count: number;
+    update_date: string;
+    comments: string | null;
+    photos?: string[];
+    efficiency?: number;
+}
+
 export const useUpdatesData = () => {
   const { profile, isAdmin } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch user's objectives that they can update
   const { data: userObjectives = [], isLoading: objectivesLoading } = useQuery({
     queryKey: ['user-objectives', profile?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('objectives')
-        .select('*')
-        .eq('owner_id', profile?.id);
-      
-      if (error) throw error;
-      return data;
+      if (!profile) return [];
+      const q = query(collection(db, "objectives"), where("owner_id", "==", profile.id));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
     enabled: !!profile,
   });
 
-  // Fetch updates based on user role
   const { data: updates = [], isLoading: updatesLoading } = useQuery({
     queryKey: ['updates', profile?.id, isAdmin()],
     queryFn: async () => {
-      let query = supabase
-        .from('objective_updates')
-        .select(`
-          *,
-          objective:objectives!objective_id(title, num_activities, target_completion_date),
-          user:profiles!user_id(full_name, email)
-        `)
-        .order('update_date', { ascending: false });
-
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      return data;
+      const q = query(collection(db, "objective_updates"), orderBy("update_date", "desc"));
+      const snapshot = await getDocs(q);
+      // Manual join would be needed here if we need objective/user details
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     },
     enabled: !!profile,
   });
 
-  // Helper function to check if updates are allowed for an objective
   const checkUpdateDeadline = async (objectiveId: string): Promise<boolean> => {
-    try {
-      const { data: objective, error } = await supabase
-        .from('objectives')
-        .select('target_completion_date')
-        .eq('id', objectiveId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching objective deadline:', error);
-        return false;
-      }
-
-      if (!objective?.target_completion_date) {
-        return true; // Allow if no deadline is set
-      }
-
-      const targetDate = new Date(objective.target_completion_date);
-      const currentDate = new Date();
-      
-      // Set time to end of day for target date to allow updates on the target date
-      targetDate.setHours(23, 59, 59, 999);
-
-      return currentDate <= targetDate;
-    } catch (error) {
-      console.error('Error checking update deadline:', error);
-      return false;
-    }
+    const docRef = doc(db, "objectives", objectiveId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists() || !docSnap.data().target_completion_date) return true;
+    const targetDate = (docSnap.data().target_completion_date as Timestamp).toDate();
+    targetDate.setHours(23, 59, 59, 999);
+    return new Date() <= targetDate;
   };
 
-  // Helper function to calculate cumulative achieved count
   const calculateCumulativeCount = async (objectiveId: string, excludeUpdateId?: string): Promise<number> => {
-    try {
-      let query = supabase
-        .from('objective_updates')
-        .select('achieved_count')
-        .eq('objective_id', objectiveId)
-        .order('update_date', { ascending: true });
-
-      if (excludeUpdateId) {
-        query = query.neq('id', excludeUpdateId);
-      }
-
-      const { data, error } = await query;
-      
-      if (error) throw error;
-      
-      // Sum all achieved counts to get cumulative total
-      return (data || []).reduce((total, update) => total + update.achieved_count, 0);
-    } catch (error) {
-      console.error('Error calculating cumulative count:', error);
-      return 0;
-    }
+    const q = query(collection(db, "objective_updates"), where("objective_id", "==", objectiveId));
+    const snapshot = await getDocs(q);
+    let total = 0;
+    snapshot.forEach(doc => {
+      if (excludeUpdateId && doc.id === excludeUpdateId) return;
+      total += doc.data().achieved_count;
+    });
+    return total;
   };
 
-  // Create update mutation
   const createUpdateMutation = useMutation({
     mutationFn: async (formData: UpdateFormData) => {
-      console.log('Creating update with data:', formData);
-      
-      // Check if updates are allowed for this objective
-      const isUpdateAllowed = await checkUpdateDeadline(formData.objectiveId);
-      
-      if (!isUpdateAllowed) {
+      if (!profile) throw new Error("User not authenticated");
+      if (!(await checkUpdateDeadline(formData.objectiveId))) {
         throw new Error('Updates are no longer allowed for this objective as the target completion date has passed.');
       }
-      
-      // Upload photos first if any
-      let photoUrls: string[] = [];
+      const photoUrls: string[] = [];
       if (formData.photos && formData.photos.length > 0) {
-        console.log('Uploading photos:', formData.photos.length);
-        
         for (const photo of formData.photos) {
-          const fileExt = photo.name.split('.').pop();
-          const fileName = `${profile?.id}/${Date.now()}.${fileExt}`;
-          
-          const { error: uploadError } = await supabase.storage
-            .from('update-photos')
-            .upload(fileName, photo);
-
-          if (uploadError) {
-            console.error('Photo upload error:', uploadError);
-            throw uploadError;
-          }
-
-          const { data } = supabase.storage
-            .from('update-photos')
-            .getPublicUrl(fileName);
-          
-          photoUrls.push(data.publicUrl);
+          const photoRef = ref(storage, `update-photos/${profile.id}/${Date.now()}_${photo.name}`);
+          await uploadBytes(photoRef, photo);
+          photoUrls.push(await getDownloadURL(photoRef));
         }
       }
-
-      // Create the update record with the achieved_count as an incremental value
-      // The achieved_count represents the additional activities completed in this update
-      const { data, error } = await supabase
-        .from('objective_updates')
-        .insert([{
-          objective_id: formData.objectiveId,
-          user_id: profile?.id,
-          achieved_count: formData.achievedCount, // This is the incremental count for this update
-          update_date: formData.updateDate,
-          photos: photoUrls.length > 0 ? photoUrls : null,
-          efficiency: 100.00, // Default efficiency
-          comments: formData.comments || null,
-        }])
-        .select();
-
-      if (error) {
-        console.error('Update creation error:', error);
-        throw error;
-      }
-
-      return data;
+      await addDoc(collection(db, "objective_updates"), {
+        objective_id: formData.objectiveId,
+        user_id: profile.id,
+        achieved_count: formData.achievedCount,
+        update_date: formData.updateDate,
+        photos: photoUrls,
+        efficiency: 100.00,
+        comments: formData.comments || null,
+        created_at: Timestamp.now(),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['updates'] });
       queryClient.invalidateQueries({ queryKey: ['objectives'] });
-      toast({
-        title: "Success",
-        description: "Update added successfully",
-      });
+      toast({ title: "Success", description: "Update added successfully" });
     },
-    onError: (error) => {
-      console.error('Update mutation error:', error);
-      
-      // Check if it's a deadline-related error
-      if (error.message.includes('target completion date has passed')) {
-        toast({
-          title: "Update Not Allowed",
-          description: "The deadline for this objective has passed. Updates are no longer permitted.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to add update",
-          variant: "destructive",
-        });
-      }
+    onError: (error: Error) => {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  // Update existing update mutation (for admins)
   const updateUpdateMutation = useMutation({
     mutationFn: async (formData: EditUpdateData) => {
-      console.log('Updating update with data:', formData);
-      
-      // First, get the objective_id from the update being edited
-      const { data: existingUpdate, error: fetchError } = await supabase
-        .from('objective_updates')
-        .select('objective_id')
-        .eq('id', formData.id)
-        .single();
+        if (!profile) throw new Error("User not authenticated");
+        const updateRef = doc(db, "objective_updates", formData.id);
+        const existingUpdate = await getDoc(updateRef);
+        if(!existingUpdate.exists()) throw new Error("Update not found");
 
-      if (fetchError) {
-        console.error('Error fetching existing update:', fetchError);
-        throw new Error('Failed to fetch update details');
-      }
-
-      // Check if updates are allowed for this objective
-      const isUpdateAllowed = await checkUpdateDeadline(existingUpdate.objective_id);
-      
-      if (!isUpdateAllowed) {
-        throw new Error('Updates are no longer allowed for this objective as the target completion date has passed.');
-      }
-      
-      // Upload new photos if any
-      let photoUrls: string[] = [];
-      if (formData.photos && formData.photos.length > 0) {
-        console.log('Uploading new photos:', formData.photos.length);
-        
-        for (const photo of formData.photos) {
-          const fileExt = photo.name.split('.').pop();
-          const fileName = `${profile?.id}/${Date.now()}.${fileExt}`;
-          
-          const { error: uploadError } = await supabase.storage
-            .from('update-photos')
-            .upload(fileName, photo);
-
-          if (uploadError) {
-            console.error('Photo upload error:', uploadError);
-            throw uploadError;
-          }
-
-          const { data } = supabase.storage
-            .from('update-photos')
-            .getPublicUrl(fileName);
-          
-          photoUrls.push(data.publicUrl);
+        if (!(await checkUpdateDeadline(existingUpdate.data().objective_id))) {
+            throw new Error('Updates are no longer allowed for this objective as the target completion date has passed.');
         }
-      }
+        
+        const photoUrls: string[] = [];
+        if (formData.photos && formData.photos.length > 0) {
+            for (const photo of formData.photos) {
+                const photoRef = ref(storage, `update-photos/${profile.id}/${Date.now()}_${photo.name}`);
+                await uploadBytes(photoRef, photo);
+                photoUrls.push(await getDownloadURL(photoRef));
+            }
+        }
 
-      // Update the record - achieved_count is still the incremental value for this specific update
-      const updateData: any = {
-        achieved_count: formData.achievedCount, // This is the incremental count for this specific update
-        update_date: formData.updateDate,
-        comments: formData.comments || null,
-      };
-
-      if (photoUrls.length > 0) {
-        updateData.photos = photoUrls;
-      }
-
-      // Only admins can update efficiency
-      if (formData.efficiency !== undefined && isAdmin()) {
-        updateData.efficiency = formData.efficiency;
-      }
-
-      const { data, error } = await supabase
-        .from('objective_updates')
-        .update(updateData)
-        .eq('id', formData.id)
-        .select();
-
-      if (error) {
-        console.error('Update edit error:', error);
-        throw error;
-      }
-
-      return data;
+        const updateData: UpdateData = {
+            achieved_count: formData.achievedCount,
+            update_date: formData.updateDate,
+            comments: formData.comments || null,
+        };
+        if(photoUrls.length > 0) updateData.photos = photoUrls;
+        if(formData.efficiency !== undefined && isAdmin()) {
+            updateData.efficiency = formData.efficiency;
+        }
+        await updateDoc(updateRef, updateData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['updates'] });
-      toast({
-        title: "Success",
-        description: "Update modified successfully",
-      });
+        queryClient.invalidateQueries({ queryKey: ['updates'] });
+        toast({ title: "Success", description: "Update modified successfully" });
     },
-    onError: (error) => {
-      console.error('Update edit mutation error:', error);
-      
-      // Check if it's a deadline-related error
-      if (error.message.includes('target completion date has passed')) {
-        toast({
-          title: "Update Not Allowed",
-          description: "The deadline for this objective has passed. Updates are no longer permitted.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to modify update",
-          variant: "destructive",
-        });
-      }
+    onError: (error: Error) => {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
-  // Delete update mutation (for admins)
   const deleteUpdateMutation = useMutation({
     mutationFn: async (updateId: string) => {
-      const { error } = await supabase
-        .from('objective_updates')
-        .delete()
-        .eq('id', updateId);
-
-      if (error) {
-        console.error('Update delete error:', error);
-        throw error;
-      }
+        await deleteDoc(doc(db, "objective_updates", updateId));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['updates'] });
-      toast({
-        title: "Success",
-        description: "Update deleted successfully",
-      });
+        queryClient.invalidateQueries({ queryKey: ['updates'] });
+        toast({ title: "Success", description: "Update deleted successfully" });
     },
-    onError: (error) => {
-      console.error('Update delete mutation error:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete update",
-        variant: "destructive",
-      });
+    onError: (error: Error) => {
+        toast({ title: "Error", description: "Failed to delete update", variant: "destructive" });
     },
   });
 
@@ -350,7 +186,7 @@ export const useUpdatesData = () => {
     isUpdating: updateUpdateMutation.isPending,
     deleteUpdate: deleteUpdateMutation.mutate,
     isDeleting: deleteUpdateMutation.isPending,
-    checkUpdateDeadline, // Export the helper function for use in components
-    calculateCumulativeCount, // Export the new helper function
+    checkUpdateDeadline,
+    calculateCumulativeCount,
   };
 };
