@@ -75,26 +75,32 @@ export const useDashboardData = () => {
       const objectivesSnapshot = await getDocs(objectivesQuery);
       const objectives = objectivesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // Fetch all users if admin
-      let allUsers = [profile];
-      if (isAdmin()) {
-        const usersQuery = query(collection(db, "profiles"), where("role", "==", "user"));
-        const usersSnapshot = await getDocs(usersQuery);
-        allUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      }
-
       // Fetch all updates
-      let updatesQuery = query(collection(db, "objective_updates"));
-      if (!isAdmin()) {
-        updatesQuery = query(updatesQuery, where("user_id", "==", profile.id));
-      }
+      const updatesQuery = query(collection(db, "objective_updates"));
       const updatesSnapshot = await getDocs(updatesQuery);
       const allUpdates = updatesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
+      // Collect user IDs from objectives and updates
+      const userIds = new Set<string>();
+      objectives.forEach((obj: { owner_id: string; }) => userIds.add(obj.owner_id));
+      allUpdates.forEach((upd: { user_id: string; }) => userIds.add(upd.user_id));
+
+      // Fetch all necessary user profiles
+      const allUsers: { [key: string]: { id: string, full_name: string, email: string, role: string } } = {};
+      const uniqueUserIds = Array.from(userIds).filter(id => id);
+      if (uniqueUserIds.length > 0) {
+        const usersQuery = query(collection(db, "profiles"), where("id", "in", uniqueUserIds));
+        const usersSnapshot = await getDocs(usersQuery);
+        usersSnapshot.forEach(doc => {
+            allUsers[doc.id] = { id: doc.id, ...(doc.data() as { full_name: string, email: string, role: string }) };
+        });
+      }
+
       // Manually join data
-      const objectivesWithUpdates = objectives.map(obj => ({
+      const objectivesWithUpdates = objectives.map((obj: { owner_id: string; id: string; }) => ({
           ...obj,
-          updates: allUpdates.filter(upd => upd.objective_id === obj.id)
+          owner: allUsers[obj.owner_id],
+          updates: allUpdates.filter((upd: { objective_id: string; }) => upd.objective_id === obj.id)
       }));
 
       // Calculations
@@ -112,7 +118,7 @@ export const useDashboardData = () => {
         averagePlannedProgress,
       };
 
-      const teamData: TeamMember[] = allUsers.map(user => {
+      const teamData: TeamMember[] = Object.values(allUsers).map((user: { id: string; full_name: string; email: string; }) => {
         const userObjectives = objectivesWithUpdates.filter(obj => obj.owner_id === user.id);
         let totalCompletion = 0;
         let totalPlannedProgress = 0;
@@ -122,9 +128,9 @@ export const useDashboardData = () => {
         });
         const averageCompletion = userObjectives.length > 0 ? Math.round(totalCompletion / userObjectives.length) : 0;
         const averagePlannedProgress = userObjectives.length > 0 ? Math.round(totalPlannedProgress / userObjectives.length) : 0;
-        const userUpdates = allUpdates.filter(update => update.user_id === user.id);
-        const totalEffectiveActivities = userUpdates.reduce((acc, update) => acc + (update.achieved_count * (update.efficiency || 100)) / 100, 0);
-        const lastUpdate = userUpdates.reduce((latest, update) => new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest, null);
+        const userUpdates = allUpdates.filter((update: { user_id: string; }) => update.user_id === user.id);
+        const totalEffectiveActivities = userUpdates.reduce((acc, update: { achieved_count: number; efficiency: number; }) => acc + (update.achieved_count * (update.efficiency || 100)) / 100, 0);
+        const lastUpdate = userUpdates.reduce((latest: { update_date: string; } | null, update: { update_date: string; }) => new Date(update.update_date) > new Date(latest?.update_date || '1970-01-01') ? update : latest, null);
 
         return {
           id: user.id,
@@ -136,9 +142,8 @@ export const useDashboardData = () => {
         };
       });
 
-      const groupedObjectiveStatuses: { [ownerName: string]: ObjectiveStatus[] } = objectivesWithUpdates.reduce((acc, objective) => {
-        const owner = allUsers.find(u => u.id === objective.owner_id);
-        const ownerName = isAdmin() ? owner?.full_name || 'Unassigned' : 'My Objectives';
+      const groupedObjectiveStatuses: { [ownerName: string]: ObjectiveStatus[] } = objectivesWithUpdates.reduce((acc, objective: { owner: { full_name: string; }; id: string; title: string; updates: ObjectiveUpdate[]; num_activities: number; weightage: string; target_completion_date: string; }) => {
+        const ownerName = isAdmin() ? objective.owner?.full_name || 'Unassigned' : 'My Objectives';
         const objectiveData: ObjectiveStatus = {
           id: objective.id,
           title: objective.title,

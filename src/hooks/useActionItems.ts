@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   Timestamp,
+  documentId,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,14 +27,82 @@ export const useActionItems = () => {
     queryFn: async () => {
       if (!profile) return [];
 
-      const q = query(collection(db, "action_items"), orderBy("created_at", "desc"));
-      const querySnapshot = await getDocs(q);
-      const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActionItem));
+      // 1. Fetch action items
+      const actionItemsQuery = query(collection(db, "action_items"), orderBy("created_at", "desc"));
+      const actionItemsSnapshot = await getDocs(actionItemsQuery);
+      const actionItems = actionItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActionItem));
 
-      // Note: Firestore doesn't support joins like Supabase.
-      // Fetching related data (assigned_user, verifier, etc.) needs to be handled separately.
-      // For now, we'll just return the raw items.
-      return items;
+      if (actionItems.length === 0) {
+        return [];
+      }
+
+      const actionItemIds = actionItems.map(item => item.id);
+
+      // 2. Fetch closures
+      const closuresQuery = query(collection(db, "action_item_closures"), where("action_item_id", "in", actionItemIds));
+      const closuresSnapshot = await getDocs(closuresQuery);
+      const closures = closuresSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // 3. Fetch verifications
+      const verificationsQuery = query(collection(db, "action_item_verifications"), where("action_item_id", "in", actionItemIds));
+      const verificationsSnapshot = await getDocs(verificationsQuery);
+      const verifications = verificationsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // 4. Collect all user IDs
+      const userIds = new Set<string>();
+      actionItems.forEach(item => {
+        if (item.assigned_to) userIds.add(item.assigned_to);
+        if (item.verifier_id) userIds.add(item.verifier_id);
+        if (item.created_by) userIds.add(item.created_by);
+      });
+      closures.forEach((closure: { closed_by: string; }) => {
+        if (closure.closed_by) userIds.add(closure.closed_by);
+      });
+      verifications.forEach((verification: { verified_by: string; }) => {
+        if (verification.verified_by) userIds.add(verification.verified_by);
+      });
+
+      const uniqueUserIds = Array.from(userIds).filter(id => id);
+
+      // 5. Fetch profiles
+      const profiles: { [key: string]: { id: string, full_name: string, email: string, role: string } } = {};
+      if (uniqueUserIds.length > 0) {
+        const chunkSize = 30;
+        for (let i = 0; i < uniqueUserIds.length; i += chunkSize) {
+            const chunk = uniqueUserIds.slice(i, i + chunkSize);
+            if (chunk.length > 0) {
+                const profilesQuery = query(collection(db, "profiles"), where(documentId(), "in", chunk));
+                const profilesSnapshot = await getDocs(profilesQuery);
+                profilesSnapshot.forEach(doc => {
+                    profiles[doc.id] = { id: doc.id, ...(doc.data() as { full_name: string, email: string, role: string }) };
+                });
+            }
+        }
+      }
+
+      // 6. Stitch data together
+      const enrichedClosures = closures.map((closure: {id: string, action_item_id: string, closed_by: string}) => ({
+        ...closure,
+        closer: profiles[closure.closed_by] || null,
+      }));
+
+      const enrichedVerifications = verifications.map((verification: {id: string, action_item_id: string, verified_by: string}) => ({
+        ...verification,
+        verifier: profiles[verification.verified_by] || null,
+      }));
+
+      const enrichedActionItems = actionItems.map((item: ActionItem) => {
+        return {
+          ...item,
+          assigned_user: profiles[item.assigned_to] || null,
+          verifier: profiles[item.verifier_id!] || null,
+          creator: profiles[item.created_by] || null,
+          closure: enrichedClosures.find(c => c.action_item_id === item.id) || null,
+          verification: enrichedVerifications.find(v => v.action_item_id === item.id) || null,
+        };
+      });
+
+      return enrichedActionItems;
     },
     enabled: !!profile,
   });

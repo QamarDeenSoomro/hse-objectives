@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   Timestamp,
+  documentId,
 } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -61,10 +62,34 @@ export const useDailyWorkData = () => {
 
       const querySnapshot = await getDocs(q);
       const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyWorkEntry));
-      
-      // Note: Fetching user data would require another query per item.
-      // This will be handled later.
-      return items;
+
+      if (items.length === 0) {
+        return [];
+      }
+
+      const userIds = Array.from(new Set(items.map(item => item.user_id).filter(id => id)));
+
+      const profiles: { [key: string]: { id: string, full_name: string, email: string, role: string } } = {};
+      if (userIds.length > 0) {
+        const chunkSize = 30;
+        for (let i = 0; i < userIds.length; i += chunkSize) {
+            const chunk = userIds.slice(i, i + chunkSize);
+            if(chunk.length > 0) {
+                const profilesQuery = query(collection(db, "profiles"), where(documentId(), "in", chunk));
+                const profilesSnapshot = await getDocs(profilesQuery);
+                profilesSnapshot.forEach(doc => {
+                    profiles[doc.id] = { id: doc.id, ...(doc.data() as { full_name: string, email: string, role: string }) };
+                });
+            }
+        }
+      }
+
+      const enrichedItems = items.map(item => ({
+        ...item,
+        user: profiles[item.user_id] || null,
+      }));
+
+      return enrichedItems;
     },
     enabled: !!profile,
   });

@@ -11,6 +11,7 @@ import {
   where,
   orderBy,
   Timestamp,
+  documentId,
 } from "firebase/firestore";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -39,9 +40,45 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
       }
 
       const querySnapshot = await getDocs(q);
-      const fetchedObjectives = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Objective));
-      setObjectives(fetchedObjectives);
-      await fetchObjectiveProgress(fetchedObjectives);
+      const objectives = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Objective));
+
+      if (objectives.length === 0) {
+        setObjectives([]);
+        setLoading(false);
+        return;
+      }
+
+      const userIds = new Set<string>();
+      objectives.forEach(obj => {
+        if (obj.owner_id) userIds.add(obj.owner_id);
+        if (obj.created_by) userIds.add(obj.created_by);
+      });
+
+      const profiles: { [key: string]: { id: string, full_name: string, email: string, role: string } } = {};
+      const uniqueUserIds = Array.from(userIds).filter(id => id);
+
+      if (uniqueUserIds.length > 0) {
+        const chunkSize = 30;
+        for (let i = 0; i < uniqueUserIds.length; i += chunkSize) {
+            const chunk = uniqueUserIds.slice(i, i + chunkSize);
+            if (chunk.length > 0) {
+                const profilesQuery = query(collection(db, "profiles"), where(documentId(), "in", chunk));
+                const profilesSnapshot = await getDocs(profilesQuery);
+                profilesSnapshot.forEach(doc => {
+                    profiles[doc.id] = { id: doc.id, ...(doc.data() as { full_name: string, email: string, role: string }) };
+                });
+            }
+        }
+      }
+
+      const enrichedObjectives = objectives.map(obj => ({
+        ...obj,
+        owner: profiles[obj.owner_id] || null,
+        creator: profiles[obj.created_by] || null,
+      }));
+
+      setObjectives(enrichedObjectives);
+      await fetchObjectiveProgress(enrichedObjectives);
     } catch (error) {
       console.error('Error fetching objectives:', error);
       toast({
