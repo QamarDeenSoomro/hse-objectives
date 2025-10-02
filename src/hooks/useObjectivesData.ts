@@ -62,11 +62,20 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
         .in('objective_id', objectiveIds)
         .order('update_date', { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching updates:', error);
+        // Set all to 0 on error
+        const progressMap: Record<string, number> = {};
+        objectives.forEach(obj => {
+          progressMap[obj.id] = 0;
+        });
+        setObjectiveProgress(progressMap);
+        return;
+      }
 
       // Group updates by objective_id
       const updatesByObjective: Record<string, any[]> = {};
-      allUpdates?.forEach(update => {
+      (allUpdates || []).forEach(update => {
         if (!updatesByObjective[update.objective_id]) {
           updatesByObjective[update.objective_id] = [];
         }
