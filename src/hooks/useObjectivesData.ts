@@ -47,22 +47,49 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
   }, [profile, isAdmin, userIdFromUrl]);
 
   const fetchObjectiveProgress = async (objectives: Objective[]) => {
-    const progressMap: Record<string, number> = {};
-    for (const objective of objectives) {
-      try {
-        const { data: updates } = await supabase
-          .from('objective_updates')
-          .select('*')
-          .eq('objective_id', objective.id)
-          .order('update_date', { ascending: true });
-
-        progressMap[objective.id] = calculateCumulativeProgress(updates || [], objective.num_activities);
-      } catch (error) {
-        console.error(`Error fetching progress for objective ${objective.id}:`, error);
-        progressMap[objective.id] = 0;
-      }
+    if (objectives.length === 0) {
+      setObjectiveProgress({});
+      return;
     }
-    setObjectiveProgress(progressMap);
+
+    try {
+      const objectiveIds = objectives.map(obj => obj.id);
+      
+      // Fetch all updates in a single query
+      const { data: allUpdates, error } = await supabase
+        .from('objective_updates')
+        .select('*')
+        .in('objective_id', objectiveIds)
+        .order('update_date', { ascending: true });
+
+      if (error) throw error;
+
+      // Group updates by objective_id
+      const updatesByObjective: Record<string, any[]> = {};
+      allUpdates?.forEach(update => {
+        if (!updatesByObjective[update.objective_id]) {
+          updatesByObjective[update.objective_id] = [];
+        }
+        updatesByObjective[update.objective_id].push(update);
+      });
+
+      // Calculate progress for each objective
+      const progressMap: Record<string, number> = {};
+      objectives.forEach(objective => {
+        const updates = updatesByObjective[objective.id] || [];
+        progressMap[objective.id] = calculateCumulativeProgress(updates, objective.num_activities);
+      });
+
+      setObjectiveProgress(progressMap);
+    } catch (error) {
+      console.error('Error fetching objective progress:', error);
+      // Set all to 0 on error
+      const progressMap: Record<string, number> = {};
+      objectives.forEach(obj => {
+        progressMap[obj.id] = 0;
+      });
+      setObjectiveProgress(progressMap);
+    }
   };
 
   const fetchUsers = async () => {
