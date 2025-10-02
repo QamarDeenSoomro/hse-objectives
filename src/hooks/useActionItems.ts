@@ -1,18 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { db, storage } from "@/integrations/firebase/client";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-} from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { ActionItem, ActionItemFormData, ActionItemClosureFormData, ActionItemVerificationFormData } from "@/types/actionItems";
@@ -26,14 +13,40 @@ export const useActionItems = () => {
     queryFn: async () => {
       if (!profile) return [];
 
-      const q = query(collection(db, "action_items"), orderBy("created_at", "desc"));
-      const querySnapshot = await getDocs(q);
-      const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActionItem));
+      const { data, error } = await supabase
+        .from('action_items')
+        .select(`
+          *,
+          assigned_user:profiles!action_items_assigned_to_fkey(full_name, email),
+          verifier:profiles!action_items_verifier_id_fkey(full_name, email),
+          creator:profiles!action_items_created_by_fkey(full_name, email)
+        `)
+        .order('created_at', { ascending: false });
 
-      // Note: Firestore doesn't support joins like Supabase.
-      // Fetching related data (assigned_user, verifier, etc.) needs to be handled separately.
-      // For now, we'll just return the raw items.
-      return items;
+      if (error) throw error;
+      
+      // Fetch closures and verifications separately
+      const itemsWithDetails = await Promise.all((data || []).map(async (item) => {
+        const { data: closures } = await supabase
+          .from('action_item_closures')
+          .select('*, closer:profiles!action_item_closures_closed_by_fkey(full_name, email)')
+          .eq('action_item_id', item.id)
+          .single();
+        
+        const { data: verifications } = await supabase
+          .from('action_item_verifications')
+          .select('*, verifier:profiles!action_item_verifications_verified_by_fkey(full_name, email)')
+          .eq('action_item_id', item.id)
+          .single();
+        
+        return {
+          ...item,
+          closure: closures || undefined,
+          verification: verifications || undefined,
+        };
+      }));
+      
+      return itemsWithDetails as ActionItem[];
     },
     enabled: !!profile,
   });
@@ -42,12 +55,14 @@ export const useActionItems = () => {
     mutationFn: async (formData: ActionItemFormData) => {
       if (!profile) throw new Error("User not authenticated");
 
-      const docRef = await addDoc(collection(db, "action_items"), {
-        ...formData,
-        created_by: profile.id,
-        created_at: Timestamp.now(),
-      });
-      return docRef;
+      const { error } = await supabase
+        .from('action_items')
+        .insert({
+          ...formData,
+          created_by: profile.id,
+        });
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['action-items'] });
@@ -68,10 +83,12 @@ export const useActionItems = () => {
 
   const updateActionItemMutation = useMutation({
     mutationFn: async ({ id, formData }: { id: string; formData: ActionItemFormData }) => {
-      const docRef = doc(db, "action_items", id);
-      await updateDoc(docRef, {
-        ...formData,
-      });
+      const { error } = await supabase
+        .from('action_items')
+        .update(formData)
+        .eq('id', id);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['action-items'] });
@@ -92,8 +109,12 @@ export const useActionItems = () => {
 
   const deleteActionItemMutation = useMutation({
     mutationFn: async (id: string) => {
-      const docRef = doc(db, "action_items", id);
-      await deleteDoc(docRef);
+      const { error } = await supabase
+        .from('action_items')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['action-items'] });
@@ -119,20 +140,33 @@ export const useActionItems = () => {
 
       if (formData.media_files && formData.media_files.length > 0) {
         for (const file of formData.media_files) {
-          const fileRef = ref(storage, `action-items/${actionItemId}/${file.name}`);
-          await uploadBytes(fileRef, file);
-          const url = await getDownloadURL(fileRef);
-          mediaUrls.push(url);
+          const fileExt = file.name.split('.').pop();
+          const filePath = `${profile.id}/${Date.now()}.${fileExt}`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('action-item-media')
+            .upload(filePath, file);
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from('action-item-media')
+            .getPublicUrl(filePath);
+
+          mediaUrls.push(publicUrl);
         }
       }
 
-      await addDoc(collection(db, "action_item_closures"), {
-        action_item_id: actionItemId,
-        closure_text: formData.closure_text,
-        media_urls: mediaUrls,
-        closed_by: profile.id,
-        created_at: Timestamp.now(),
-      });
+      const { error } = await supabase
+        .from('action_item_closures')
+        .insert({
+          action_item_id: actionItemId,
+          closure_text: formData.closure_text,
+          media_urls: mediaUrls,
+          closed_by: profile.id,
+        });
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['action-items'] });
@@ -155,12 +189,15 @@ export const useActionItems = () => {
     mutationFn: async ({ actionItemId, formData }: { actionItemId: string; formData: ActionItemVerificationFormData }) => {
       if (!profile) throw new Error("User not authenticated");
 
-      await addDoc(collection(db, "action_item_verifications"), {
-        action_item_id: actionItemId,
-        ...formData,
-        verified_by: profile.id,
-        created_at: Timestamp.now(),
-      });
+      const { error } = await supabase
+        .from('action_item_verifications')
+        .insert({
+          action_item_id: actionItemId,
+          ...formData,
+          verified_by: profile.id,
+        });
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['action-items'] });

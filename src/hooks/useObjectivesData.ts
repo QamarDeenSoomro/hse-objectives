@@ -1,17 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { db } from "@/integrations/firebase/client";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-} from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { Objective, UserProfile, ObjectiveFormData } from "@/types/objectives";
@@ -28,20 +16,24 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
     if (!profile) return;
     setLoading(true);
     try {
-      let q = query(collection(db, "objectives"), orderBy("created_at", "desc"));
+      let query = supabase
+        .from('objectives')
+        .select('*, owner:profiles!objectives_owner_id_fkey(full_name, email), creator:profiles!objectives_created_by_fkey(full_name, email)')
+        .order('created_at', { ascending: false });
 
       if (isAdmin()) {
         if (userIdFromUrl) {
-          q = query(q, where("owner_id", "==", userIdFromUrl));
+          query = query.eq('owner_id', userIdFromUrl);
         }
       } else {
-        q = query(q, where("owner_id", "==", profile.id));
+        query = query.eq('owner_id', profile.id);
       }
 
-      const querySnapshot = await getDocs(q);
-      const fetchedObjectives = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Objective));
-      setObjectives(fetchedObjectives);
-      await fetchObjectiveProgress(fetchedObjectives);
+      const { data, error } = await query;
+      if (error) throw error;
+
+      setObjectives(data as Objective[]);
+      await fetchObjectiveProgress(data as Objective[]);
     } catch (error) {
       console.error('Error fetching objectives:', error);
       toast({
@@ -58,14 +50,13 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
     const progressMap: Record<string, number> = {};
     for (const objective of objectives) {
       try {
-        const updatesQuery = query(
-          collection(db, "objective_updates"),
-          where("objective_id", "==", objective.id),
-          orderBy("update_date", "asc")
-        );
-        const updatesSnapshot = await getDocs(updatesQuery);
-        const updates = updatesSnapshot.docs.map(doc => doc.data());
-        progressMap[objective.id] = calculateCumulativeProgress(updates, objective.num_activities);
+        const { data: updates } = await supabase
+          .from('objective_updates')
+          .select('*')
+          .eq('objective_id', objective.id)
+          .order('update_date', { ascending: true });
+
+        progressMap[objective.id] = calculateCumulativeProgress(updates || [], objective.num_activities);
       } catch (error) {
         console.error(`Error fetching progress for objective ${objective.id}:`, error);
         progressMap[objective.id] = 0;
@@ -76,9 +67,13 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
 
   const fetchUsers = async () => {
     try {
-      const usersQuery = query(collection(db, "profiles"), orderBy("full_name"));
-      const usersSnapshot = await getDocs(usersQuery);
-      setUsers(usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile)));
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('full_name');
+
+      if (error) throw error;
+      setUsers(data as UserProfile[]);
     } catch (error) {
       console.error('Error fetching users:', error);
     }
@@ -88,15 +83,20 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
     if (!profile) return;
     try {
       const targetDate = getDateFromQuarter(formData.targetQuarter, 2025);
-      await addDoc(collection(db, "objectives"), {
-        ...formData,
-        weightage: parseFloat(formData.weightage),
-        num_activities: parseInt(formData.numActivities),
-        owner_id: isAdmin() ? formData.ownerId : profile.id,
-        created_by: profile.id,
-        target_completion_date: targetDate,
-        created_at: Timestamp.now(),
-      });
+      const { error } = await supabase
+        .from('objectives')
+        .insert({
+          title: formData.title,
+          description: formData.description,
+          weightage: parseFloat(formData.weightage),
+          num_activities: parseInt(formData.numActivities),
+          owner_id: isAdmin() ? formData.ownerId : profile.id,
+          created_by: profile.id,
+          target_completion_date: targetDate,
+        });
+
+      if (error) throw error;
+
       toast({
         title: "Success",
         description: "Objective created successfully",
@@ -116,14 +116,20 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
     if (!profile) return;
     try {
       const targetDate = getDateFromQuarter(formData.targetQuarter, 2025);
-      const docRef = doc(db, "objectives", objectiveId);
-      await updateDoc(docRef, {
-        ...formData,
-        weightage: parseFloat(formData.weightage),
-        num_activities: parseInt(formData.numActivities),
-        owner_id: isAdmin() ? formData.ownerId : profile.id,
-        target_completion_date: targetDate,
-      });
+      const { error } = await supabase
+        .from('objectives')
+        .update({
+          title: formData.title,
+          description: formData.description,
+          weightage: parseFloat(formData.weightage),
+          num_activities: parseInt(formData.numActivities),
+          owner_id: isAdmin() ? formData.ownerId : profile.id,
+          target_completion_date: targetDate,
+        })
+        .eq('id', objectiveId);
+
+      if (error) throw error;
+
       toast({
         title: "Success",
         description: "Objective updated successfully",
@@ -142,7 +148,13 @@ export const useObjectivesData = (userIdFromUrl?: string | null) => {
   const deleteObjective = async (id: string) => {
     if (!confirm('Are you sure you want to delete this objective?')) return;
     try {
-      await deleteDoc(doc(db, "objectives", id));
+      const { error } = await supabase
+        .from('objectives')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
       toast({
         title: "Success",
         description: "Objective deleted successfully",

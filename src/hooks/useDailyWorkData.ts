@@ -1,17 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { db } from "@/integrations/firebase/client";
-import {
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  query,
-  where,
-  orderBy,
-  Timestamp,
-} from "firebase/firestore";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
@@ -21,8 +9,8 @@ export interface DailyWorkEntry {
   work_date: string;
   work_description: string;
   admin_comments: string | null;
-  created_at: Timestamp;
-  updated_at: Timestamp;
+  created_at: string;
+  updated_at: string;
   user?: {
     full_name: string;
     email: string;
@@ -48,23 +36,19 @@ export const useDailyWorkData = () => {
     queryFn: async () => {
       if (!profile) return [];
 
-      let q;
-      if (isAdmin()) {
-        q = query(collection(db, "daily_work"), orderBy("work_date", "desc"));
-      } else {
-        q = query(
-          collection(db, "daily_work"),
-          where("user_id", "==", profile.id),
-          orderBy("work_date", "desc")
-        );
+      let query = supabase
+        .from('daily_work')
+        .select('*, user:profiles!daily_work_user_id_fkey(full_name, email)')
+        .order('work_date', { ascending: false });
+
+      if (!isAdmin()) {
+        query = query.eq('user_id', profile.id);
       }
 
-      const querySnapshot = await getDocs(q);
-      const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as DailyWorkEntry));
-      
-      // Note: Fetching user data would require another query per item.
-      // This will be handled later.
-      return items;
+      const { data, error } = await query;
+
+      if (error) throw error;
+      return data as DailyWorkEntry[];
     },
     enabled: !!profile,
   });
@@ -73,12 +57,14 @@ export const useDailyWorkData = () => {
     mutationFn: async (formData: DailyWorkFormData) => {
       if (!profile) throw new Error("User not authenticated");
 
-      await addDoc(collection(db, "daily_work"), {
-        user_id: profile.id,
-        ...formData,
-        created_at: Timestamp.now(),
-        updated_at: Timestamp.now(),
-      });
+      const { error } = await supabase
+        .from('daily_work')
+        .insert({
+          user_id: profile.id,
+          ...formData,
+        });
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['daily-work'] });
@@ -99,12 +85,14 @@ export const useDailyWorkData = () => {
 
   const updateDailyWorkMutation = useMutation({
     mutationFn: async (formData: DailyWorkFormData & { id: string }) => {
-        if (!profile) throw new Error("User not authenticated");
-        const docRef = doc(db, "daily_work", formData.id);
-        await updateDoc(docRef, {
-            ...formData,
-            updated_at: Timestamp.now(),
-        });
+      if (!profile) throw new Error("User not authenticated");
+      
+      const { error } = await supabase
+        .from('daily_work')
+        .update(formData)
+        .eq('id', formData.id);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['daily-work'] });
@@ -128,11 +116,13 @@ export const useDailyWorkData = () => {
       if (!isAdmin()) {
         throw new Error('Only admins can add comments');
       }
-      const docRef = doc(db, "daily_work", commentData.id);
-      await updateDoc(docRef, {
-        admin_comments: commentData.admin_comments,
-        updated_at: Timestamp.now(),
-      });
+      
+      const { error } = await supabase
+        .from('daily_work')
+        .update({ admin_comments: commentData.admin_comments })
+        .eq('id', commentData.id);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['daily-work'] });
@@ -153,10 +143,14 @@ export const useDailyWorkData = () => {
 
   const deleteDailyWorkMutation = useMutation({
     mutationFn: async (entryId: string) => {
-        if (!profile) throw new Error("User not authenticated");
-        const docRef = doc(db, "daily_work", entryId);
-        // We should add a security rule in Firestore to ensure users can only delete their own entries.
-        await deleteDoc(docRef);
+      if (!profile) throw new Error("User not authenticated");
+      
+      const { error } = await supabase
+        .from('daily_work')
+        .delete()
+        .eq('id', entryId);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['daily-work'] });
