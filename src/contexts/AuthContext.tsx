@@ -43,13 +43,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const { data: profileData } = await supabase
+        const { data: profileData, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single();
         
-        if (profileData) {
+        if (error) {
+          console.error('Error fetching profile:', error);
+          setProfile(null);
+        } else if (profileData) {
+          console.log('Profile loaded:', profileData);
           setProfile(profileData as UserProfile);
         } else {
           setProfile(null);
@@ -69,8 +73,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .select('*')
           .eq('id', session.user.id)
           .single()
-          .then(({ data }) => {
-            if (data) setProfile(data as UserProfile);
+          .then(({ data, error }) => {
+            if (error) {
+              console.error('Error fetching profile on init:', error);
+            } else if (data) {
+              console.log('Profile loaded on init:', data);
+              setProfile(data as UserProfile);
+            }
             setLoading(false);
           });
       } else {
