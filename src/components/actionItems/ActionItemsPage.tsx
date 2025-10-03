@@ -4,13 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
-import { Plus, CheckSquare, Clock, Shield, AlertTriangle } from "lucide-react";
+import { Plus, CheckSquare, Clock, Shield, AlertTriangle, Upload } from "lucide-react";
 import { useActionItems } from "@/hooks/useActionItems";
 import { ActionItemFormDialog } from "./ActionItemFormDialog";
 import { ActionItemCard } from "./ActionItemCard";
 import { ActionItemClosureDialog } from "./ActionItemClosureDialog";
 import { ActionItemVerificationDialog } from "./ActionItemVerificationDialog";
+import { BulkUploadDialog } from "./BulkUploadDialog";
 import { ActionItem, ActionItemFormData } from "@/types/actionItems";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export const ActionItemsPage = () => {
   const { isAdmin, profile } = useAuth();
@@ -20,14 +23,26 @@ export const ActionItemsPage = () => {
     createActionItem, 
     isCreating, 
     updateActionItem, 
-    isUpdating 
+    isUpdating,
+    bulkCreateActionItems,
+    isBulkCreating
   } = useActionItems();
   
   const [isFormDialogOpen, setIsFormDialogOpen] = useState(false);
+  const [isBulkUploadDialogOpen, setIsBulkUploadDialogOpen] = useState(false);
   const [isClosureDialogOpen, setIsClosureDialogOpen] = useState(false);
   const [isVerificationDialogOpen, setIsVerificationDialogOpen] = useState(false);
   const [editingActionItem, setEditingActionItem] = useState<ActionItem | null>(null);
   const [selectedActionItem, setSelectedActionItem] = useState<ActionItem | null>(null);
+
+  // Fetch all users for bulk upload
+  const { data: users = [] } = useQuery({
+    queryKey: ['users-list'],
+    queryFn: async () => {
+      const { data } = await supabase.from('profiles').select('*');
+      return data || [];
+    },
+  });
 
   // Filter action items based on user role and status
   const myActionItems = actionItems.filter(item => item.assigned_to === profile?.id);
@@ -67,6 +82,11 @@ export const ActionItemsPage = () => {
     setIsFormDialogOpen(false);
   };
 
+  const handleBulkUpload = (items: ActionItemFormData[]) => {
+    bulkCreateActionItems(items);
+    setIsBulkUploadDialogOpen(false);
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center">
@@ -86,13 +106,23 @@ export const ActionItemsPage = () => {
           </p>
         </div>
         {isAdmin() && (
-          <Button 
-            onClick={handleAddNew}
-            className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Action Item
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleAddNew}
+              className="bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Action Item
+            </Button>
+            <Button 
+              onClick={() => setIsBulkUploadDialogOpen(true)}
+              variant="outline"
+              className="border-blue-600 text-blue-600 hover:bg-blue-50"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Bulk Upload
+            </Button>
+          </div>
         )}
       </div>
 
@@ -312,6 +342,14 @@ export const ActionItemsPage = () => {
         isOpen={isVerificationDialogOpen}
         onOpenChange={setIsVerificationDialogOpen}
         actionItem={selectedActionItem}
+      />
+
+      <BulkUploadDialog
+        isOpen={isBulkUploadDialogOpen}
+        onOpenChange={setIsBulkUploadDialogOpen}
+        onUpload={handleBulkUpload}
+        isUploading={isBulkCreating}
+        users={users}
       />
     </div>
   );

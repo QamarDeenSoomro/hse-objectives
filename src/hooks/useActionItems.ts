@@ -81,6 +81,39 @@ export const useActionItems = () => {
     },
   });
 
+  const bulkCreateActionItemsMutation = useMutation({
+    mutationFn: async (formDataArray: ActionItemFormData[]) => {
+      if (!profile) throw new Error("User not authenticated");
+
+      const itemsToInsert = formDataArray.map(formData => ({
+        ...formData,
+        created_by: profile.id,
+      }));
+
+      const { error } = await supabase
+        .from('action_items')
+        .insert(itemsToInsert);
+
+      if (error) throw error;
+      return itemsToInsert.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['action-items'] });
+      toast({
+        title: "Success",
+        description: `${count} action items uploaded successfully`,
+      });
+    },
+    onError: (error) => {
+      console.error('Bulk action item creation error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload action items",
+        variant: "destructive",
+      });
+    },
+  });
+
   const updateActionItemMutation = useMutation({
     mutationFn: async ({ id, formData }: { id: string; formData: ActionItemFormData }) => {
       const { error } = await supabase
@@ -221,6 +254,8 @@ export const useActionItems = () => {
     isLoading,
     createActionItem: createActionItemMutation.mutate,
     isCreating: createActionItemMutation.isPending,
+    bulkCreateActionItems: bulkCreateActionItemsMutation.mutate,
+    isBulkCreating: bulkCreateActionItemsMutation.isPending,
     updateActionItem: updateActionItemMutation.mutate,
     isUpdating: updateActionItemMutation.isPending,
     deleteActionItem: deleteActionItemMutation.mutate,
