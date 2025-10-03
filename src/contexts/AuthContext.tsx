@@ -38,30 +38,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       
       if (session?.user) {
-        const { data: profileData, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (error) {
-          console.error('Error fetching profile:', error);
-          setProfile(null);
-        } else if (profileData) {
-          console.log('Profile loaded:', profileData);
-          setProfile(profileData as UserProfile);
-        } else {
-          setProfile(null);
-        }
+        setTimeout(() => {
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single()
+            .then(({ data: profileData, error }) => {
+              if (error) {
+                console.error('Error fetching profile:', error);
+                setProfile(null);
+              } else if (profileData) {
+                console.log('Profile loaded:', profileData);
+                setProfile(profileData as UserProfile);
+              } else {
+                setProfile(null);
+              }
+              setLoading(false);
+            });
+        }, 0);
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -76,6 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           .then(({ data, error }) => {
             if (error) {
               console.error('Error fetching profile on init:', error);
+              setProfile(null);
             } else if (data) {
               console.log('Profile loaded on init:', data);
               setProfile(data as UserProfile);
