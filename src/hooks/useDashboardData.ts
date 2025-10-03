@@ -176,10 +176,16 @@ export const useDashboardData = () => {
   });
 
   return {
-    stats: data?.stats,
-    teamData: data?.teamData,
-    groupedObjectiveStatuses: data?.groupedObjectiveStatuses,
+    stats: data?.stats ?? {
+      totalObjectives: 0,
+      averageCompletion: 0,
+      totalActivities: 0,
+      plannedActivities: 0,
+      averagePlannedProgress: 0,
+    },
+    teamData: data?.teamData ?? [],
+    groupedObjectiveStatuses: data?.groupedObjectiveStatuses ?? {},
     isLoading,
-    isAdmin: data?.isAdmin,
+    isAdmin: data?.isAdmin ?? false,
   };
 };
