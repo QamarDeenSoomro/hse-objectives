@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.database-restore]
 verify_jwt = true
+
+[functions.admin-update-password]
+verify_jwt = true
