@@ -1,1 +1,7 @@
 project_id = "qybwuzdqidrclprvoagv"
+
+[functions.database-backup]
+verify_jwt = true
+
+[functions.database-restore]
+verify_jwt = true

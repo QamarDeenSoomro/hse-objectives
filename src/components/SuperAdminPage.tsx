@@ -22,7 +22,9 @@ import {
   CheckCircle,
   XCircle,
   UserCheck,
-  UserX
+  UserX,
+  Download,
+  Upload
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -60,6 +62,8 @@ export const SuperAdminPage = () => {
   const [users, setUsers] = useState<UserData[]>([]);
   const [newSetting, setNewSetting] = useState({ key: "", value: "", description: "" });
   const [togglingUsers, setTogglingUsers] = useState<Set<string>>(new Set());
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
 
   useEffect(() => {
     // Only load data when auth is complete and user is confirmed superadmin
@@ -316,6 +320,87 @@ export const SuperAdminPage = () => {
     }
   };
 
+  const handleBackupDatabase = async () => {
+    setIsBackingUp(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('database-backup', {
+        method: 'GET'
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to create backup');
+      }
+
+      // Create download
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `database-backup-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Success",
+        description: "Database backup downloaded successfully",
+      });
+    } catch (error) {
+      console.error('Backup error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create backup",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleRestoreDatabase = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm('⚠️ WARNING: This will replace ALL data in the database with the backup data. This action cannot be undone. Are you sure you want to continue?')) {
+      event.target.value = '';
+      return;
+    }
+
+    setIsRestoring(true);
+    try {
+      const fileContent = await file.text();
+      const backup = JSON.parse(fileContent);
+
+      const { data, error } = await supabase.functions.invoke('database-restore', {
+        method: 'POST',
+        body: { backup }
+      });
+
+      if (error) {
+        throw new Error(error.message || 'Failed to restore database');
+      }
+
+      toast({
+        title: "Success",
+        description: data.message || "Database restored successfully",
+      });
+
+      // Reload data after restore
+      await loadData();
+    } catch (error) {
+      console.error('Restore error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to restore database",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRestoring(false);
+      event.target.value = '';
+    }
+  };
+
   // Show loading while auth is still loading
   if (authLoading) {
     return (
@@ -368,10 +453,11 @@ export const SuperAdminPage = () => {
       </div>
 
       <Tabs defaultValue="settings" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="settings">System Settings</TabsTrigger>
           <TabsTrigger value="permissions">Permissions</TabsTrigger>
           <TabsTrigger value="users">User Management</TabsTrigger>
+          <TabsTrigger value="backup">Backup & Restore</TabsTrigger>
           <TabsTrigger value="monitoring">System Monitor</TabsTrigger>
         </TabsList>
 
@@ -652,6 +738,118 @@ export const SuperAdminPage = () => {
                   })}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="backup" className="space-y-6">
+          <Card className="border-0 shadow-lg">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Database className="h-5 w-5 text-blue-600" />
+                Database Backup & Restore
+              </CardTitle>
+              <CardDescription>
+                Create backups and restore complete database snapshots
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Backup Section */}
+              <div className="border border-blue-200 rounded-lg p-6 bg-blue-50">
+                <div className="flex items-start gap-4">
+                  <Download className="h-8 w-8 text-blue-600 mt-1" />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Create Backup</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Download a complete snapshot of all database tables including profiles, objectives, 
+                      updates, daily work, action items, and system settings.
+                    </p>
+                    <Button 
+                      onClick={handleBackupDatabase}
+                      disabled={isBackingUp}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      {isBackingUp ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                          Creating Backup...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4 mr-2" />
+                          Download Backup
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Restore Section */}
+              <div className="border border-red-200 rounded-lg p-6 bg-red-50">
+                <div className="flex items-start gap-4">
+                  <Upload className="h-8 w-8 text-red-600 mt-1" />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Restore from Backup</h3>
+                    <div className="bg-red-100 border border-red-300 rounded-md p-3 mb-4">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-red-800">
+                          <strong>Warning:</strong> Restoring will replace ALL current data with the backup data. 
+                          This action cannot be undone. Make sure you have a current backup before proceeding.
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Upload a previously downloaded backup file to restore the database to that state.
+                    </p>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="file"
+                        accept=".json"
+                        onChange={handleRestoreDatabase}
+                        disabled={isRestoring}
+                        className="hidden"
+                        id="restore-file-input"
+                      />
+                      <label htmlFor="restore-file-input">
+                        <Button 
+                          variant="destructive"
+                          disabled={isRestoring}
+                          className="cursor-pointer"
+                          asChild
+                        >
+                          <span>
+                            {isRestoring ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                                Restoring...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-4 w-4 mr-2" />
+                                Upload & Restore
+                              </>
+                            )}
+                          </span>
+                        </Button>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Information */}
+              <div className="border rounded-lg p-4 bg-gray-50">
+                <h4 className="font-medium text-gray-900 mb-2">Backup Information</h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Backups include all user data, objectives, updates, and system settings</li>
+                  <li>• Backup files are in JSON format and can be opened with any text editor</li>
+                  <li>• Store backups securely as they contain sensitive data</li>
+                  <li>• Regular backups are recommended before major system changes</li>
+                  <li>• Only super admins can create and restore backups</li>
+                </ul>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
