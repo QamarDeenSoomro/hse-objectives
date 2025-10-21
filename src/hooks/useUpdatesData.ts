@@ -125,11 +125,18 @@ export const useUpdatesData = () => {
         });
 
       if (error) throw error;
+
+      // Return update details for WhatsApp message generation
+      return {
+        objectiveId: formData.objectiveId,
+        achievedCount: formData.achievedCount,
+        updateDate: formData.updateDate,
+        comments: formData.comments,
+      };
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['updates'] });
       queryClient.invalidateQueries({ queryKey: ['objectives'] });
-      toast({ title: "Success", description: "Update added successfully" });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });

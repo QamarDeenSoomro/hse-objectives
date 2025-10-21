@@ -10,6 +10,7 @@ import { UpdateFormDialog } from "@/components/updates/UpdateFormDialog";
 import { EditUpdateDialog } from "@/components/updates/EditUpdateDialog";
 import { UpdatesTable } from "@/components/updates/UpdatesTable";
 import { TeamUpdatesView } from "@/components/updates/TeamUpdatesView";
+import { WhatsAppShareDialog } from "@/components/updates/WhatsAppShareDialog";
 
 export const UpdatesPage = () => {
   const { isAdmin, profile } = useAuth();
@@ -18,6 +19,8 @@ export const UpdatesPage = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+  const [isWhatsAppDialogOpen, setIsWhatsAppDialogOpen] = useState(false);
+  const [whatsAppMessage, setWhatsAppMessage] = useState("");
   const [selectedObjectiveUpdates, setSelectedObjectiveUpdates] = useState<any[]>([]);
   const [selectedObjectiveTitle, setSelectedObjectiveTitle] = useState("");
   const [editingUpdate, setEditingUpdate] = useState<any>(null);
@@ -64,8 +67,26 @@ export const UpdatesPage = () => {
   };
 
   const handleFormSubmit = (data: any) => {
-    createUpdate(data);
-    setIsDialogOpen(false);
+    createUpdate(data, {
+      onSuccess: () => {
+        setIsDialogOpen(false);
+        
+        // Generate WhatsApp message
+        const objective = userObjectives.find(obj => obj.id === data.objectiveId);
+        const objectiveTitle = objective?.title || "Objective";
+        const userName = profile?.full_name || "Team Member";
+        
+        const message = `📊 *Update Notification*\n\n` +
+          `👤 *User:* ${userName}\n` +
+          `🎯 *Objective:* ${objectiveTitle}\n` +
+          `✅ *Achieved Count:* ${data.achievedCount}\n` +
+          `📅 *Date:* ${new Date(data.updateDate).toLocaleDateString()}\n` +
+          (data.comments ? `\n💬 *Comments:* ${data.comments}` : '');
+        
+        setWhatsAppMessage(message);
+        setIsWhatsAppDialogOpen(true);
+      }
+    });
   };
 
   const handleEditSubmit = (data: any) => {
@@ -168,6 +189,12 @@ export const UpdatesPage = () => {
         onOpenChange={setIsDetailDialogOpen}
         objectiveTitle={selectedObjectiveTitle}
         updates={selectedObjectiveUpdates}
+      />
+
+      <WhatsAppShareDialog
+        isOpen={isWhatsAppDialogOpen}
+        onOpenChange={setIsWhatsAppDialogOpen}
+        message={whatsAppMessage}
       />
     </div>
   );
