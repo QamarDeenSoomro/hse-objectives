@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { 
@@ -64,6 +65,9 @@ export const SuperAdminPage = () => {
   const [togglingUsers, setTogglingUsers] = useState<Set<string>>(new Set());
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [showPlatformDialog, setShowPlatformDialog] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<'supabase' | 'firebase'>('supabase');
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   useEffect(() => {
     // Only load data when auth is complete and user is confirmed superadmin
@@ -358,23 +362,37 @@ export const SuperAdminPage = () => {
     }
   };
 
-  const handleRestoreDatabase = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!confirm('⚠️ WARNING: This will replace ALL data in the database with the backup data. This action cannot be undone. Are you sure you want to continue?')) {
-      event.target.value = '';
+    setPendingFile(file);
+    setShowPlatformDialog(true);
+    event.target.value = '';
+  };
+
+  const handleRestoreDatabase = async () => {
+    if (!pendingFile) return;
+
+    if (!confirm(`⚠️ WARNING: This will replace ALL data in the ${selectedPlatform === 'firebase' ? 'Firebase' : 'Supabase'} database with the backup data. This action cannot be undone. Are you sure you want to continue?`)) {
+      setShowPlatformDialog(false);
+      setPendingFile(null);
       return;
     }
 
     setIsRestoring(true);
+    setShowPlatformDialog(false);
+    
     try {
-      const fileContent = await file.text();
+      const fileContent = await pendingFile.text();
       const backup = JSON.parse(fileContent);
 
       const { data, error } = await supabase.functions.invoke('database-restore', {
         method: 'POST',
-        body: { backup }
+        body: { 
+          backup,
+          platform: selectedPlatform
+        }
       });
 
       if (error) {
@@ -383,11 +401,13 @@ export const SuperAdminPage = () => {
 
       toast({
         title: "Success",
-        description: data.message || "Database restored successfully",
+        description: data.message || `Database restored successfully to ${selectedPlatform}`,
       });
 
       // Reload data after restore
-      await loadData();
+      if (selectedPlatform === 'supabase') {
+        await loadData();
+      }
     } catch (error) {
       console.error('Restore error:', error);
       toast({
@@ -397,7 +417,7 @@ export const SuperAdminPage = () => {
       });
     } finally {
       setIsRestoring(false);
-      event.target.value = '';
+      setPendingFile(null);
     }
   };
 
@@ -807,7 +827,7 @@ export const SuperAdminPage = () => {
                       <input
                         type="file"
                         accept=".json"
-                        onChange={handleRestoreDatabase}
+                        onChange={handleFileSelect}
                         disabled={isRestoring}
                         className="hidden"
                         id="restore-file-input"
@@ -828,7 +848,7 @@ export const SuperAdminPage = () => {
                             ) : (
                               <>
                                 <Upload className="h-4 w-4 mr-2" />
-                                Upload & Restore
+                                Select Backup File
                               </>
                             )}
                           </span>
@@ -902,6 +922,70 @@ export const SuperAdminPage = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Platform Selection Dialog */}
+      <Dialog open={showPlatformDialog} onOpenChange={setShowPlatformDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Restore Platform</DialogTitle>
+            <DialogDescription>
+              Choose the platform where you want to restore this backup.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="platform">Target Platform</Label>
+              <Select value={selectedPlatform} onValueChange={(value: 'supabase' | 'firebase') => setSelectedPlatform(value)}>
+                <SelectTrigger id="platform">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="supabase">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-4 w-4" />
+                      Supabase (PostgreSQL)
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="firebase">
+                    <div className="flex items-center gap-2">
+                      <Database className="h-4 w-4" />
+                      Firebase (Firestore)
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+              <p className="text-sm text-blue-800">
+                {selectedPlatform === 'supabase' 
+                  ? 'Backup will be restored to Supabase PostgreSQL database using SQL tables.'
+                  : 'Backup will be restored to Firebase Firestore using document collections. Tables will be mapped to appropriate collections.'}
+              </p>
+            </div>
+            {selectedPlatform === 'firebase' && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                  <p className="text-sm text-yellow-800">
+                    Make sure Firebase Admin credentials (FIREBASE_SERVICE_ACCOUNT) are configured in edge function secrets.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setShowPlatformDialog(false);
+              setPendingFile(null);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleRestoreDatabase} variant="destructive">
+              Continue to Restore
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
